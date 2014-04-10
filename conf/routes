@@ -1,0 +1,24 @@
+# Routes
+# This file defines all application routes (Higher priority routes first)
+# ~~~~
+
+# Routes for managing users
+
+# Search for users
+GET           /users                controllers.Users.list(p:Int ?= 1, ipp:Int ?= 25, q:Option[String], s:Option[String])
+
+# Retrieve a user
+GET           /users/:id            controllers.Users.get(id:String)
+
+# Delete a user, user must be authorized
+DELETE        /users/:id            controllers.Users.delete(id:String)
+
+# Delete a user, user must be authorized
+DELETE        /users                controllers.Users.deleteList(q:Option[String])
+
+# Create a user, user must be authorized
+POST          /users                controllers.Users.create()
+
+# Update a user
+PUT           /users                controllers.Users.update()
+
