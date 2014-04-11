@@ -221,7 +221,7 @@ class UsersSpec extends Specification {
       contentAsBytes(deleteuser).length must equalTo(0)
     }
 
-    "A user should be queryable by a range of Ints" in new WithApplication {
+    "A user should be queryable by a complete range of Ints" in new WithApplication {
       val fakeUser = makeUser
 
       val createuser = route(FakeRequest(POST, "/users").withJsonBody(Json.toJson(fakeUser))).get
@@ -235,11 +235,39 @@ class UsersSpec extends Specification {
       contentType(users1) must beSome.which(_ == "application/json")
       contentAsString(users1) must contain("\"age\":18")
 
+      val deleteuser = route(FakeRequest(DELETE, "/users/" + fakeUser.id)).get
+      status(deleteuser) must equalTo(OK)
+      contentType(deleteuser) must beNone
+      contentAsBytes(deleteuser).length must equalTo(0)
+    }
+
+    "A user should be queryable by a right-end open partial range of Ints" in new WithApplication {
+      val fakeUser = makeUser
+
+      val createuser = route(FakeRequest(POST, "/users").withJsonBody(Json.toJson(fakeUser))).get
+      status(createuser) must equalTo(CREATED)
+      contentType(createuser) must beNone
+      contentAsBytes(createuser).length must equalTo(0)
+
       // test partial range - enable once embedded mongo is in place
       val users2 = route(FakeRequest(GET, "/users?age=(17,)")).get
       status(users2) must equalTo(OK)
       contentType(users2) must beSome.which(_ == "application/json")
       contentAsString(users2) must contain("\"age\":18")
+
+      val deleteuser = route(FakeRequest(DELETE, "/users/" + fakeUser.id)).get
+      status(deleteuser) must equalTo(OK)
+      contentType(deleteuser) must beNone
+      contentAsBytes(deleteuser).length must equalTo(0)
+    }
+
+    "A user should be queryable by a left-end open partial range of Ints" in new WithApplication {
+      val fakeUser = makeUser
+
+      val createuser = route(FakeRequest(POST, "/users").withJsonBody(Json.toJson(fakeUser))).get
+      status(createuser) must equalTo(CREATED)
+      contentType(createuser) must beNone
+      contentAsBytes(createuser).length must equalTo(0)
 
       // test partial range
       val users3 = route(FakeRequest(GET, "/users?age=(,19)")).get
@@ -247,11 +275,39 @@ class UsersSpec extends Specification {
       contentType(users3) must beSome.which(_ == "application/json")
       contentAsString(users3) must contain("\"age\":18")
 
+      val deleteuser = route(FakeRequest(DELETE, "/users/" + fakeUser.id)).get
+      status(deleteuser) must equalTo(OK)
+      contentType(deleteuser) must beNone
+      contentAsBytes(deleteuser).length must equalTo(0)
+    }
+
+    "A user should be queryable by a right-end open partial inclusive range of Ints" in new WithApplication {
+      val fakeUser = makeUser
+
+      val createuser = route(FakeRequest(POST, "/users").withJsonBody(Json.toJson(fakeUser))).get
+      status(createuser) must equalTo(CREATED)
+      contentType(createuser) must beNone
+      contentAsBytes(createuser).length must equalTo(0)
+
       // test partial range - enable once embedded mongo is in place
       val users4 = route(FakeRequest(GET, "/users?age=(18,)")).get
       status(users4) must equalTo(OK)
       contentType(users4) must beSome.which(_ == "application/json")
       contentAsString(users4) must contain("\"age\":18")
+
+      val deleteuser = route(FakeRequest(DELETE, "/users/" + fakeUser.id)).get
+      status(deleteuser) must equalTo(OK)
+      contentType(deleteuser) must beNone
+      contentAsBytes(deleteuser).length must equalTo(0)
+    }
+
+    "A user should be queryable by a left-end open partial inclusive range of Ints" in new WithApplication {
+      val fakeUser = makeUser
+
+      val createuser = route(FakeRequest(POST, "/users").withJsonBody(Json.toJson(fakeUser))).get
+      status(createuser) must equalTo(CREATED)
+      contentType(createuser) must beNone
+      contentAsBytes(createuser).length must equalTo(0)
 
       // test partial range
       val users5 = route(FakeRequest(GET, "/users?age=(,18)")).get
@@ -259,11 +315,39 @@ class UsersSpec extends Specification {
       contentType(users5) must beSome.which(_ == "application/json")
       contentAsString(users5) must contain("\"age\":18")
 
+      val deleteuser = route(FakeRequest(DELETE, "/users/" + fakeUser.id)).get
+      status(deleteuser) must equalTo(OK)
+      contentType(deleteuser) must beNone
+      contentAsBytes(deleteuser).length must equalTo(0)
+    }
+
+    "A user should be queryable by a right-end open partial exclusive range of Ints" in new WithApplication {
+      val fakeUser = makeUser
+
+      val createuser = route(FakeRequest(POST, "/users").withJsonBody(Json.toJson(fakeUser))).get
+      status(createuser) must equalTo(CREATED)
+      contentType(createuser) must beNone
+      contentAsBytes(createuser).length must equalTo(0)
+
       // test partial range - enable once embedded mongo is in place
       val users6 = route(FakeRequest(GET, "/users?age=(19,)")).get
       status(users6) must equalTo(OK)
       contentType(users6) must beSome.which(_ == "application/json")
       contentAsString(users6) must not contain("\"age\":18")
+
+      val deleteuser = route(FakeRequest(DELETE, "/users/" + fakeUser.id)).get
+      status(deleteuser) must equalTo(OK)
+      contentType(deleteuser) must beNone
+      contentAsBytes(deleteuser).length must equalTo(0)
+    }
+
+    "A user should not be queryable by a left-end open partial exclusive range of Ints" in new WithApplication {
+      val fakeUser = makeUser
+
+      val createuser = route(FakeRequest(POST, "/users").withJsonBody(Json.toJson(fakeUser))).get
+      status(createuser) must equalTo(CREATED)
+      contentType(createuser) must beNone
+      contentAsBytes(createuser).length must equalTo(0)
 
       // test partial range
       val users7 = route(FakeRequest(GET, "/users?age=(,17)")).get
@@ -314,11 +398,39 @@ class UsersSpec extends Specification {
       contentType(users1) must beSome.which(_ == "application/json")
       contentAsString(users1) must contain("\"age\":18")
 
+      val deleteuser = route(FakeRequest(DELETE, "/users/" + fakeUser.id)).get
+      status(deleteuser) must equalTo(OK)
+      contentType(deleteuser) must beNone
+      contentAsBytes(deleteuser).length must equalTo(0)
+    }
+
+    "A user should be queryable by a 1-element array of Ints" in new WithApplication {
+      val fakeUser = makeUser
+
+      val createuser = route(FakeRequest(POST, "/users").withJsonBody(Json.toJson(fakeUser))).get
+      status(createuser) must equalTo(CREATED)
+      contentType(createuser) must beNone
+      contentAsBytes(createuser).length must equalTo(0)
+
       // test alone
       val users3 = route(FakeRequest(GET, "/users?age=[18]")).get
       status(users3) must equalTo(OK)
       contentType(users3) must beSome.which(_ == "application/json")
       contentAsString(users3) must contain("\"age\":18")
+
+      val deleteuser = route(FakeRequest(DELETE, "/users/" + fakeUser.id)).get
+      status(deleteuser) must equalTo(OK)
+      contentType(deleteuser) must beNone
+      contentAsBytes(deleteuser).length must equalTo(0)
+    }
+
+    "A user should be queryable by an array of Ints with match in last element" in new WithApplication {
+      val fakeUser = makeUser
+
+      val createuser = route(FakeRequest(POST, "/users").withJsonBody(Json.toJson(fakeUser))).get
+      status(createuser) must equalTo(CREATED)
+      contentType(createuser) must beNone
+      contentAsBytes(createuser).length must equalTo(0)
 
       // test on end
       val users4 = route(FakeRequest(GET, "/users?age=[17,18]")).get
@@ -326,12 +438,40 @@ class UsersSpec extends Specification {
       contentType(users4) must beSome.which(_ == "application/json")
       contentAsString(users4) must contain("\"age\":18")
 
+      val deleteuser = route(FakeRequest(DELETE, "/users/" + fakeUser.id)).get
+      status(deleteuser) must equalTo(OK)
+      contentType(deleteuser) must beNone
+      contentAsBytes(deleteuser).length must equalTo(0)
+    }
+
+    "A user should be queryable by an array of Ints with match in first element" in new WithApplication {
+      val fakeUser = makeUser
+
+      val createuser = route(FakeRequest(POST, "/users").withJsonBody(Json.toJson(fakeUser))).get
+      status(createuser) must equalTo(CREATED)
+      contentType(createuser) must beNone
+      contentAsBytes(createuser).length must equalTo(0)
+
       // test on other end
       val users5 = route(FakeRequest(GET, "/users?age=[18,19]")).get
       status(users5) must equalTo(OK)
       contentType(users5) must beSome.which(_ == "application/json")
       contentAsString(users5) must contain("\"age\":18")
 
+
+      val deleteuser = route(FakeRequest(DELETE, "/users/" + fakeUser.id)).get
+      status(deleteuser) must equalTo(OK)
+      contentType(deleteuser) must beNone
+      contentAsBytes(deleteuser).length must equalTo(0)
+    }
+
+    "A user should not be queryable by an array of Ints with no matching element" in new WithApplication {
+      val fakeUser = makeUser
+
+      val createuser = route(FakeRequest(POST, "/users").withJsonBody(Json.toJson(fakeUser))).get
+      status(createuser) must equalTo(CREATED)
+      contentType(createuser) must beNone
+      contentAsBytes(createuser).length must equalTo(0)
 
       // test not in range
       val users7 = route(FakeRequest(GET, "/users?age=[17,19,20]")).get
