@@ -22,7 +22,7 @@
 
 package models.dao
 
-import reactivemongo.bson.{BSONDocumentWriter, BSONDocument, BSONObjectID}
+import reactivemongo.bson._
 
 /* Implicits */
 
@@ -35,9 +35,12 @@ import reactivemongo.bson.{BSONDocumentWriter, BSONDocument, BSONObjectID}
  */
 object DBQueryBuilder {
 
-	def id(objectId: String): BSONDocument = id(BSONObjectID(objectId))
-
 	def id(objectId: BSONObjectID): BSONDocument = BSONDocument("_id" -> objectId)
+
+  def id(objectId: Option[String]): BSONDocument = objectId match {
+     case None => BSONDocument("_id" -> BSONUndefined)
+     case Some(s) => id(BSONObjectID(s))
+   }
 
 	def set(field: String, data: BSONDocument): BSONDocument = set(BSONDocument(field -> data))
 

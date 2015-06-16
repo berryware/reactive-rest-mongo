@@ -28,7 +28,7 @@ import reactivemongo.bson._
 import reactivemongo.bson.BSONDateTime
 
 case class User (
-  id : String,
+  id : Option[String],
   firstName: String,
   lastName: String,
   fullName: String,
@@ -44,8 +44,12 @@ object User {
 
   implicit val format = Json.format[User]
 
-  implicit object DAO extends IdentifiableDAO[User]{
+  implicit object defaultDAO extends IdentifiableDAO[User]{
     val collectionName = "myusers"
+  }
+
+  implicit object loggedInDAO extends IdentifiableDAO[User]{
+    val collectionName = "loggedInUsers"
   }
 
   /**
@@ -71,7 +75,7 @@ object User {
   implicit object UserBSONReader extends BSONDocumentReader[User] {
     def read(doc: BSONDocument): User =
       User(
-        doc.getAs[BSONObjectID]("_id").get.stringify,
+        doc.getAs[BSONObjectID]("_id") map { _.stringify},
         doc.getAs[String]("firstName").get,
         doc.getAs[String]("lastName").get,
         doc.getAs[String]("fullName").get,
@@ -86,7 +90,7 @@ object User {
   implicit object UserBSONWriter extends BSONDocumentWriter[User] {
     def write(user: User): BSONDocument =
       BSONDocument(
-        "_id" -> BSONObjectID(user.id),
+        "_id" -> user.id.map(BSONObjectID(_)),
         "firstName" -> user.firstName,
         "lastName" -> user.lastName,
         "fullName" -> user.fullName,

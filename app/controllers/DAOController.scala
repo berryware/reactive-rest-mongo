@@ -22,9 +22,11 @@
 
 package controllers
 
+import play.api.mvc.Action
+
 import scala.util.{Failure, Success}
 import scala.concurrent.{ExecutionContext, Future}
-import play.api.mvc.{Action,Controller}
+import play.api.mvc.Controller
 import play.api.libs.json.{Format, Json}
 import reactivemongo.bson.{BSONDocumentReader, BSONDocumentWriter}
 import models.dao.IdentifiableDAO
@@ -35,13 +37,15 @@ import scala.reflect.runtime.universe.TypeTag
 /**
  * Created by dberry on 11/3/14.
  */
-class DAOController[T <: Identifiable] extends Controller {
+trait DAOController[T <: Identifiable] extends Controller {
   import ExecutionContext.Implicits.global
+
+  val dao:IdentifiableDAO[T]
 
   val defaultOffset = 0
   val defaultLimit = 25
 
-  def create()(implicit dao:IdentifiableDAO[T], writer: BSONDocumentWriter[T], fmt:Format[T] ) = Action.async(parse.json) { request =>
+  def create()(implicit writer: BSONDocumentWriter[T], fmt:Format[T] ) = Action.async(parse.json) { implicit request =>
     // process the json body
     request.body.validate[T].map { instance =>
       dao.insert(instance).map {
@@ -51,16 +55,29 @@ class DAOController[T <: Identifiable] extends Controller {
     }.getOrElse(Future.successful(BadRequest("invalid json")))
   }
 
-  def get(id:String)(implicit dao:IdentifiableDAO[T],reader: BSONDocumentReader[T], fmt:Format[T]) = Action.async {
-    dao.findById(id).map {
+  def getById(id:String)(implicit reader: BSONDocumentReader[T], fmt:Format[T]) = Action.async {
+    dao.findById(Some(id)).map {
       case None => NotFound
-      case Some(funnler) => Ok(Json.toJson(funnler))
+      case Some(doc) => Ok(Json.toJson(doc))
     }.recover {
       case e: Exception => NotFound
     }
    }
 
-  def update()(implicit dao:IdentifiableDAO[T], writer: BSONDocumentWriter[T], fmt:Format[T]) = Action.async(parse.json) { request =>
+  def getByAlt()(implicit reader: BSONDocumentReader[T], fmt:Format[T], attrMap: AttributeMap[T], tag : TypeTag[T] ) = Action.async { request =>
+    val paramMap = request.queryString.map {
+          case (k, v) => Logger.debug(k+"->"+v); k -> v.mkString
+    }
+    dao.findOne(paramMap).map {
+      case None => Logger.debug("Could not find by alternate attributes"); NotFound
+      case Some(doc) => Ok(Json.toJson(doc))
+    }.recover {
+      case e: Exception => Logger.error("Errored out: "+e.getLocalizedMessage); NotFound
+    }
+   }
+
+
+  def update()(implicit writer: BSONDocumentWriter[T], fmt:Format[T]) = Action.async(parse.json) { request =>
       // process the json body
       request.body.validate[T].map { instance =>
         dao.update(instance).map {
@@ -70,26 +87,40 @@ class DAOController[T <: Identifiable] extends Controller {
       }.getOrElse(Future.successful(BadRequest("invalid json")))
     }
 
-  def delete(id:String)(implicit dao:IdentifiableDAO[T]) = Action.async {
-    dao.remove(id).map {
+  def delete(id:String) = Action.async {
+    dao.remove(Some(id)).map {
       case Failure(t) => BadRequest(t.getLocalizedMessage)
       case Success(count) => if (count > 0) Ok else NotFound
     }
   }
 
-  def deleteList(q: Option[String])(implicit dao:IdentifiableDAO[T], filterSet: FilterSet[T], attrMap: AttributeMap[T], tag : TypeTag[T] ) = Action.async { request =>
+  def deleteList(q: Option[String])(implicit filterSet: FilterSet[T], attrMap: AttributeMap[T], tag : TypeTag[T] ) = Action.async { request =>
     val paramMap = request.queryString.map {
       case (k, v) => Logger.debug(k+"->"+v); k -> v.mkString
     } - "q"
 
     dao.remove(q, paramMap).map {
       case Failure(t) => BadRequest(t.getLocalizedMessage)
-      case Success(count) => if (count > 0) Ok(count.toString) else NotFound
+      case Success(count) => Ok(count.toString)
     }
   }
 
-  def list(p:Int, ipp: Int, q: Option[String], s: Option[String])(implicit dao: IdentifiableDAO[T], reader: BSONDocumentReader[T], fmt: Format[T], pgfmt: Format[Pagination], filterSet: FilterSet[T], attrMap: AttributeMap[T], tag : TypeTag[T] ) = Action.async {
-    request =>
+  /**
+   *
+   * @param p The page that is being requested.
+   * @param ipp Items per page
+   * @param q A query that gets turned into a regex, .*q.* this gets used from search pages, and searches all fields listed in the DAOs Filter Set
+   * @param s This is the sort order. It is in the format of field1,field2 1, field3 -1. Which is field1 asc, field2 desc, field3 asc
+   * @param reader
+   * @param fmt
+   * @param pgfmt
+   * @param filterSet
+   * @param attrMap
+   * @param tag
+   * @return
+   */
+  def list(p:Int, ipp: Int, q: Option[String], s: Option[String])(implicit reader: BSONDocumentReader[T], fmt: Format[T], pgfmt: Format[Pagination], filterSet: FilterSet[T], attrMap: AttributeMap[T], tag : TypeTag[T] ) = Action.async {
+    request => // get all the params that are not know params
       val paramMap = request.queryString.map {
         case (k, v) => Logger.debug(k+"->"+v); k -> v.mkString
       } - "q" - "s" - "p" - "ipp"
@@ -100,8 +131,8 @@ class DAOController[T <: Identifiable] extends Controller {
       Logger.debug("ipp = "+ipp)
 
       dao.find(q, s, p, ipp, paramMap).map {
-        funnlers =>
-          Ok(Json.toJson(Map("page" -> Json.toJson(new Pagination(p,ipp,funnlers._2)), "items" -> Json.toJson(funnlers._1))))
+        docs =>
+          Ok(Json.toJson(Map("page" -> Json.toJson(new Pagination(p,ipp,docs._2)), "items" -> Json.toJson(docs._1))))
       }
   }
 

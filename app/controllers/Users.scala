@@ -28,5 +28,5 @@ import models.User
  * Created by dberry on 25/3/14.
  */
 object Users extends DAOController[User]{
-
+  val dao=User.defaultDAO
 }

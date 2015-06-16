@@ -26,5 +26,5 @@ package models
  * Created by dberry on 7/3/14.
  */
 trait Identifiable {
-  val id: String
+  val id: Option[String]
 }

@@ -4,21 +4,24 @@
 
 # Routes for managing users
 
-# Search for users
-GET           /users                controllers.Users.list(p:Int ?= 1, ipp:Int ?= 25, q:Option[String], s:Option[String])
+# Retrieve a user by an alternate attribute
+GET           /users/alt                  controllers.Users.getByAlt()
 
 # Retrieve a user
-GET           /users/:id            controllers.Users.get(id:String)
+GET           /users/:id                  controllers.Users.getById(id:String)
+
+# Retrieve a paginated list of users
+GET           /users                      controllers.Users.list(p:Int ?= 1, ipp:Int ?= 25, q:Option[String], s:Option[String])
 
 # Delete a user, user must be authorized
-DELETE        /users/:id            controllers.Users.delete(id:String)
+DELETE        /users/:id                  controllers.Users.delete(id:String)
 
 # Delete a user, user must be authorized
-DELETE        /users                controllers.Users.deleteList(q:Option[String])
+DELETE        /users                      controllers.Users.deleteList(q:Option[String])
 
 # Create a user, user must be authorized
-POST          /users                controllers.Users.create()
+POST          /users                      controllers.Users.create()
 
 # Update a user
-PUT           /users                controllers.Users.update()
+PUT           /users                      controllers.Users.update()
 

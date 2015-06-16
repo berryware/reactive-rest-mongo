@@ -1,16 +1,13 @@
 package controllers
 
 import org.joda.time.DateTime
-import org.specs2.mutable._
-import org.specs2.runner._
-import org.junit.runner._
+import play.api.GlobalSettings
 
 import play.api.libs.json.Json
 import play.api.test._
-import play.api.test.Helpers._
 import reactivemongo.bson.BSONObjectID
 import models.User
-import scala.Some
+import com.github.athieriot.EmbedConnection
 
 
 /**
@@ -18,15 +15,20 @@ import scala.Some
  * You can mock out a whole application including requests, plugins etc.
  * For more information, consult the wiki.
  */
-@RunWith(classOf[JUnitRunner])
-class UsersSpec extends Specification {
-
-  def bsonObjectId = BSONObjectID.generate.stringify
+class UsersSpec extends PlaySpecification with EmbedConnection {
+  sequential
 
   "User APIs" should {
 
+    def fakeApplicationWithGlobal = FakeApplication(
+      additionalConfiguration = Map("mongodb.uri" -> "mongodb://localhost:12345/test"),
+      withGlobal = Some(new GlobalSettings(){})
+    )
+
+    def bsonObjectId = BSONObjectID.generate.stringify
+
     def makeUser = User(
-      bsonObjectId,
+      Some(bsonObjectId),
       "First 1",
       "Last 1",
       "Fake User 1",
@@ -38,7 +40,7 @@ class UsersSpec extends Specification {
     )
 
     def makeUser2(id: String) = User(
-      id,
+      Some(id),
       "First 2",
       "Last 2",
       "Fake User 2",
@@ -49,7 +51,7 @@ class UsersSpec extends Specification {
       Some(DateTime.now)
     )
 
-    "not find a user that has not been created" in new WithApplication {
+    "not find a user that has not been created" in new WithApplication(fakeApplicationWithGlobal) {
       val user = route(FakeRequest(GET, "/users/" + bsonObjectId)).get
 
       status(user) must equalTo(NOT_FOUND)
@@ -57,7 +59,7 @@ class UsersSpec extends Specification {
       contentAsBytes(user).length must equalTo(0)
     }
 
-    "not delete a user that does not exist" in new WithApplication {
+    "not delete a user that does not exist" in new WithApplication(fakeApplicationWithGlobal) {
       val user = route(FakeRequest(DELETE, "/users/" + bsonObjectId)).get
 
       status(user) must equalTo(NOT_FOUND)
@@ -65,7 +67,7 @@ class UsersSpec extends Specification {
       contentAsBytes(user).length must equalTo(0)
     }
 
-    "not update a user that does not exist" in new WithApplication {
+    "not update a user that does not exist" in new WithApplication(fakeApplicationWithGlobal) {
       val user = route(FakeRequest(PUT, "/users").withJsonBody(Json.toJson(makeUser))).get
 
       status(user) must equalTo(NOT_FOUND)
@@ -73,7 +75,7 @@ class UsersSpec extends Specification {
       contentAsBytes(user).length must equalTo(0)
     }
 
-    "create and delete a user that does not exist" in new WithApplication {
+    "create and delete a user that does not exist" in new WithApplication(fakeApplicationWithGlobal) {
       val fakeUser = makeUser
 
       val createuser = route(FakeRequest(POST, "/users").withJsonBody(Json.toJson(fakeUser))).get
@@ -81,13 +83,13 @@ class UsersSpec extends Specification {
       contentType(createuser) must beNone
       contentAsBytes(createuser).length must equalTo(0)
 
-      val deleteuser = route(FakeRequest(DELETE, "/users/" + fakeUser.id)).get
+      val deleteuser = route(FakeRequest(DELETE, "/users/" + fakeUser.id.get)).get
       status(deleteuser) must equalTo(OK)
       contentType(deleteuser) must beNone
       contentAsBytes(deleteuser).length must equalTo(0)
     }
 
-    "not create a user that already exists" in new WithApplication {
+    "not create a user that already exists" in new WithApplication(fakeApplicationWithGlobal) {
       val fakeUser = makeUser
 
       val createuser = route(FakeRequest(POST, "/users").withJsonBody(Json.toJson(fakeUser))).get
@@ -99,13 +101,13 @@ class UsersSpec extends Specification {
       status(user) must equalTo(BAD_REQUEST)
       contentType(user) must beSome("text/plain")
 
-      val deleteuser = route(FakeRequest(DELETE, "/users/" + fakeUser.id)).get
+      val deleteuser = route(FakeRequest(DELETE, "/users/" + fakeUser.id.get)).get
       status(deleteuser) must equalTo(OK)
       contentType(deleteuser) must beNone
       contentAsBytes(deleteuser).length must equalTo(0)
     }
 
-    "get a user that already exists" in new WithApplication {
+    "get a user that already exists" in new WithApplication(fakeApplicationWithGlobal) {
       val fakeUser = makeUser
 
       val createuser = route(FakeRequest(POST, "/users").withJsonBody(Json.toJson(fakeUser))).get
@@ -113,20 +115,20 @@ class UsersSpec extends Specification {
       contentType(createuser) must beNone
       contentAsBytes(createuser).length must equalTo(0)
 
-      val getuser = route(FakeRequest(GET, "/users/" + fakeUser.id)).get
+      val getuser = route(FakeRequest(GET, "/users/" + fakeUser.id.get)).get
       status(getuser) must equalTo(OK)
       contentType(getuser) must beSome.which(_ == "application/json")
       contentAsString(getuser) must contain("\"fullName\":\"Fake User 1\"")
 
-      val deleteuser = route(FakeRequest(DELETE, "/users/" + fakeUser.id)).get
+      val deleteuser = route(FakeRequest(DELETE, "/users/" + fakeUser.id.get)).get
       status(deleteuser) must equalTo(OK)
       contentType(deleteuser) must beNone
       contentAsBytes(deleteuser).length must equalTo(0)
     }
 
-    "update a user that already exists" in new WithApplication {
+    "update a user that already exists" in new WithApplication(fakeApplicationWithGlobal) {
       val fakeUser = makeUser
-      val fakeUser2 = makeUser2(fakeUser.id)
+      val fakeUser2 = makeUser2(fakeUser.id.get)
 
       val createuser = route(FakeRequest(POST, "/users").withJsonBody(Json.toJson(fakeUser))).get
       status(createuser) must equalTo(CREATED)
@@ -138,13 +140,13 @@ class UsersSpec extends Specification {
       contentType(updateuser) must beNone
       contentAsBytes(updateuser).length must equalTo(0)
 
-      val deleteuser = route(FakeRequest(DELETE, "/users/" + fakeUser2.id)).get
+      val deleteuser = route(FakeRequest(DELETE, "/users/" + fakeUser2.id.get)).get
       status(deleteuser) must equalTo(OK)
       contentType(deleteuser) must beNone
       contentAsBytes(deleteuser).length must equalTo(0)
     }
 
-    "A list of users be queryable by an integer attribute of a user" in new WithApplication {
+    "A list of users be queryable by an integer attribute of a user" in new WithApplication(fakeApplicationWithGlobal) {
       val fakeUser = makeUser
 
       val createuser = route(FakeRequest(POST, "/users").withJsonBody(Json.toJson(fakeUser))).get
@@ -157,14 +159,14 @@ class UsersSpec extends Specification {
       contentType(users) must beSome.which(_ == "application/json")
       contentAsString(users) must contain("\"fullName\":\"Fake User 1\"")
 
-      val deleteuser = route(FakeRequest(DELETE, "/users/" + fakeUser.id)).get
+      val deleteuser = route(FakeRequest(DELETE, "/users/" + fakeUser.id.get)).get
       status(deleteuser) must equalTo(OK)
       contentType(deleteuser) must beNone
       contentAsBytes(deleteuser).length must equalTo(0)
 
     }
 
-    "A list of users be queryable by a DateTime attribute of a user" in new WithApplication {
+    "A list of users be queryable by a DateTime attribute of a user" in new WithApplication(fakeApplicationWithGlobal) {
       val fakeUser = makeUser
 
       val createuser = route(FakeRequest(POST, "/users").withJsonBody(Json.toJson(fakeUser))).get
@@ -177,13 +179,13 @@ class UsersSpec extends Specification {
       contentType(users) must beSome.which(_ == "application/json")
       contentAsString(users) must contain("\"fullName\":\"Fake User 1\"")
 
-      val deleteuser = route(FakeRequest(DELETE, "/users/" + fakeUser.id)).get
+      val deleteuser = route(FakeRequest(DELETE, "/users/" + fakeUser.id.get)).get
       status(deleteuser) must equalTo(OK)
       contentType(deleteuser) must beNone
       contentAsBytes(deleteuser).length must equalTo(0)
     }
 
-    "A list of users should not be found with one good match and one bad match " in new WithApplication {
+    "A list of users should not be found with one good match and one bad match " in new WithApplication(fakeApplicationWithGlobal) {
       val fakeUser = makeUser
 
       val createuser = route(FakeRequest(POST, "/users").withJsonBody(Json.toJson(fakeUser))).get
@@ -196,13 +198,13 @@ class UsersSpec extends Specification {
       contentType(users) must beSome.which(_ == "application/json")
       contentAsString(users) must not contain ("\"fullName\":\"Fake User 1\"")
 
-      val deleteuser = route(FakeRequest(DELETE, "/users/" + fakeUser.id)).get
+      val deleteuser = route(FakeRequest(DELETE, "/users/" + fakeUser.id.get)).get
       status(deleteuser) must equalTo(OK)
       contentType(deleteuser) must beNone
       contentAsBytes(deleteuser).length must equalTo(0)
     }
 
-    "A list of users be queryable by an Int and a DateTime attribute of a user" in new WithApplication {
+    "A list of users be queryable by an Int and a DateTime attribute of a user" in new WithApplication(fakeApplicationWithGlobal) {
       val fakeUser = makeUser
 
       val createuser = route(FakeRequest(POST, "/users").withJsonBody(Json.toJson(fakeUser))).get
@@ -215,13 +217,13 @@ class UsersSpec extends Specification {
       contentType(users) must beSome.which(_ == "application/json")
       contentAsString(users) must contain("\"fullName\":\"Fake User 1\"")
 
-      val deleteuser = route(FakeRequest(DELETE, "/users/" + fakeUser.id)).get
+      val deleteuser = route(FakeRequest(DELETE, "/users/" + fakeUser.id.get)).get
       status(deleteuser) must equalTo(OK)
       contentType(deleteuser) must beNone
       contentAsBytes(deleteuser).length must equalTo(0)
     }
 
-    "A user should be queryable by a complete range of Ints" in new WithApplication {
+    "A user should be queryable by a complete range of Ints" in new WithApplication(fakeApplicationWithGlobal) {
       val fakeUser = makeUser
 
       val createuser = route(FakeRequest(POST, "/users").withJsonBody(Json.toJson(fakeUser))).get
@@ -235,13 +237,13 @@ class UsersSpec extends Specification {
       contentType(users1) must beSome.which(_ == "application/json")
       contentAsString(users1) must contain("\"age\":18")
 
-      val deleteuser = route(FakeRequest(DELETE, "/users/" + fakeUser.id)).get
+      val deleteuser = route(FakeRequest(DELETE, "/users/" + fakeUser.id.get)).get
       status(deleteuser) must equalTo(OK)
       contentType(deleteuser) must beNone
       contentAsBytes(deleteuser).length must equalTo(0)
     }
 
-    "A user should be queryable by a right-end open partial range of Ints" in new WithApplication {
+    "A user should be queryable by a right-end open partial range of Ints" in new WithApplication(fakeApplicationWithGlobal) {
       val fakeUser = makeUser
 
       val createuser = route(FakeRequest(POST, "/users").withJsonBody(Json.toJson(fakeUser))).get
@@ -255,13 +257,13 @@ class UsersSpec extends Specification {
       contentType(users2) must beSome.which(_ == "application/json")
       contentAsString(users2) must contain("\"age\":18")
 
-      val deleteuser = route(FakeRequest(DELETE, "/users/" + fakeUser.id)).get
+      val deleteuser = route(FakeRequest(DELETE, "/users/" + fakeUser.id.get)).get
       status(deleteuser) must equalTo(OK)
       contentType(deleteuser) must beNone
       contentAsBytes(deleteuser).length must equalTo(0)
     }
 
-    "A user should be queryable by a left-end open partial range of Ints" in new WithApplication {
+    "A user should be queryable by a left-end open partial range of Ints" in new WithApplication(fakeApplicationWithGlobal) {
       val fakeUser = makeUser
 
       val createuser = route(FakeRequest(POST, "/users").withJsonBody(Json.toJson(fakeUser))).get
@@ -275,13 +277,13 @@ class UsersSpec extends Specification {
       contentType(users3) must beSome.which(_ == "application/json")
       contentAsString(users3) must contain("\"age\":18")
 
-      val deleteuser = route(FakeRequest(DELETE, "/users/" + fakeUser.id)).get
+      val deleteuser = route(FakeRequest(DELETE, "/users/" + fakeUser.id.get)).get
       status(deleteuser) must equalTo(OK)
       contentType(deleteuser) must beNone
       contentAsBytes(deleteuser).length must equalTo(0)
     }
 
-    "A user should be queryable by a right-end open partial inclusive range of Ints" in new WithApplication {
+    "A user should be queryable by a right-end open partial inclusive range of Ints" in new WithApplication(fakeApplicationWithGlobal) {
       val fakeUser = makeUser
 
       val createuser = route(FakeRequest(POST, "/users").withJsonBody(Json.toJson(fakeUser))).get
@@ -295,13 +297,13 @@ class UsersSpec extends Specification {
       contentType(users4) must beSome.which(_ == "application/json")
       contentAsString(users4) must contain("\"age\":18")
 
-      val deleteuser = route(FakeRequest(DELETE, "/users/" + fakeUser.id)).get
+      val deleteuser = route(FakeRequest(DELETE, "/users/" + fakeUser.id.get)).get
       status(deleteuser) must equalTo(OK)
       contentType(deleteuser) must beNone
       contentAsBytes(deleteuser).length must equalTo(0)
     }
 
-    "A user should be queryable by a left-end open partial inclusive range of Ints" in new WithApplication {
+    "A user should be queryable by a left-end open partial inclusive range of Ints" in new WithApplication(fakeApplicationWithGlobal) {
       val fakeUser = makeUser
 
       val createuser = route(FakeRequest(POST, "/users").withJsonBody(Json.toJson(fakeUser))).get
@@ -315,13 +317,13 @@ class UsersSpec extends Specification {
       contentType(users5) must beSome.which(_ == "application/json")
       contentAsString(users5) must contain("\"age\":18")
 
-      val deleteuser = route(FakeRequest(DELETE, "/users/" + fakeUser.id)).get
+      val deleteuser = route(FakeRequest(DELETE, "/users/" + fakeUser.id.get)).get
       status(deleteuser) must equalTo(OK)
       contentType(deleteuser) must beNone
       contentAsBytes(deleteuser).length must equalTo(0)
     }
 
-    "A user should be queryable by a right-end open partial exclusive range of Ints" in new WithApplication {
+    "A user should be queryable by a right-end open partial exclusive range of Ints" in new WithApplication(fakeApplicationWithGlobal) {
       val fakeUser = makeUser
 
       val createuser = route(FakeRequest(POST, "/users").withJsonBody(Json.toJson(fakeUser))).get
@@ -335,13 +337,13 @@ class UsersSpec extends Specification {
       contentType(users6) must beSome.which(_ == "application/json")
       contentAsString(users6) must not contain("\"age\":18")
 
-      val deleteuser = route(FakeRequest(DELETE, "/users/" + fakeUser.id)).get
+      val deleteuser = route(FakeRequest(DELETE, "/users/" + fakeUser.id.get)).get
       status(deleteuser) must equalTo(OK)
       contentType(deleteuser) must beNone
       contentAsBytes(deleteuser).length must equalTo(0)
     }
 
-    "A user should not be queryable by a left-end open partial exclusive range of Ints" in new WithApplication {
+    "A user should not be queryable by a left-end open partial exclusive range of Ints" in new WithApplication(fakeApplicationWithGlobal) {
       val fakeUser = makeUser
 
       val createuser = route(FakeRequest(POST, "/users").withJsonBody(Json.toJson(fakeUser))).get
@@ -355,13 +357,13 @@ class UsersSpec extends Specification {
       contentType(users7) must beSome.which(_ == "application/json")
       contentAsString(users7) must not contain ("\"age\":18")
 
-      val deleteuser = route(FakeRequest(DELETE, "/users/" + fakeUser.id)).get
+      val deleteuser = route(FakeRequest(DELETE, "/users/" + fakeUser.id.get)).get
       status(deleteuser) must equalTo(OK)
       contentType(deleteuser) must beNone
       contentAsBytes(deleteuser).length must equalTo(0)
     }
 
-    "A list of users should return the created users" in new WithApplication {
+    "A list of users should return the created users" in new WithApplication(fakeApplicationWithGlobal) {
       val fakeUser1 = makeUser
       val fakeUser2 = makeUser2(bsonObjectId)
 
@@ -373,18 +375,18 @@ class UsersSpec extends Specification {
       contentAsString(users) must contain("\"fullName\":\"Fake User 1\"")
       contentAsString(users) must contain("\"fullName\":\"Fake User 2\"")
 
-      val deleteuser = route(FakeRequest(DELETE, "/users/" + fakeUser1.id)).get
+      val deleteuser = route(FakeRequest(DELETE, "/users/" + fakeUser1.id.get)).get
       status(deleteuser) must equalTo(OK)
       contentType(deleteuser) must beNone
       contentAsBytes(deleteuser).length must equalTo(0)
 
-      val deleteuser2 = route(FakeRequest(DELETE, "/users/" + fakeUser2.id)).get
+      val deleteuser2 = route(FakeRequest(DELETE, "/users/" + fakeUser2.id.get)).get
       status(deleteuser2) must equalTo(OK)
       contentType(deleteuser2) must beNone
       contentAsBytes(deleteuser2).length must equalTo(0)
     }
 
-    "A user should be queryable by an array of Ints" in new WithApplication {
+    "A user should be queryable by an array of Ints" in new WithApplication(fakeApplicationWithGlobal) {
       val fakeUser = makeUser
 
       val createuser = route(FakeRequest(POST, "/users").withJsonBody(Json.toJson(fakeUser))).get
@@ -398,13 +400,13 @@ class UsersSpec extends Specification {
       contentType(users1) must beSome.which(_ == "application/json")
       contentAsString(users1) must contain("\"age\":18")
 
-      val deleteuser = route(FakeRequest(DELETE, "/users/" + fakeUser.id)).get
+      val deleteuser = route(FakeRequest(DELETE, "/users/" + fakeUser.id.get)).get
       status(deleteuser) must equalTo(OK)
       contentType(deleteuser) must beNone
       contentAsBytes(deleteuser).length must equalTo(0)
     }
 
-    "A user should be queryable by a 1-element array of Ints" in new WithApplication {
+    "A user should be queryable by a 1-element array of Ints" in new WithApplication(fakeApplicationWithGlobal) {
       val fakeUser = makeUser
 
       val createuser = route(FakeRequest(POST, "/users").withJsonBody(Json.toJson(fakeUser))).get
@@ -418,13 +420,13 @@ class UsersSpec extends Specification {
       contentType(users3) must beSome.which(_ == "application/json")
       contentAsString(users3) must contain("\"age\":18")
 
-      val deleteuser = route(FakeRequest(DELETE, "/users/" + fakeUser.id)).get
+      val deleteuser = route(FakeRequest(DELETE, "/users/" + fakeUser.id.get)).get
       status(deleteuser) must equalTo(OK)
       contentType(deleteuser) must beNone
       contentAsBytes(deleteuser).length must equalTo(0)
     }
 
-    "A user should be queryable by an array of Ints with match in last element" in new WithApplication {
+    "A user should be queryable by an array of Ints with match in last element" in new WithApplication(fakeApplicationWithGlobal) {
       val fakeUser = makeUser
 
       val createuser = route(FakeRequest(POST, "/users").withJsonBody(Json.toJson(fakeUser))).get
@@ -438,13 +440,13 @@ class UsersSpec extends Specification {
       contentType(users4) must beSome.which(_ == "application/json")
       contentAsString(users4) must contain("\"age\":18")
 
-      val deleteuser = route(FakeRequest(DELETE, "/users/" + fakeUser.id)).get
+      val deleteuser = route(FakeRequest(DELETE, "/users/" + fakeUser.id.get)).get
       status(deleteuser) must equalTo(OK)
       contentType(deleteuser) must beNone
       contentAsBytes(deleteuser).length must equalTo(0)
     }
 
-    "A user should be queryable by an array of Ints with match in first element" in new WithApplication {
+    "A user should be queryable by an array of Ints with match in first element" in new WithApplication(fakeApplicationWithGlobal) {
       val fakeUser = makeUser
 
       val createuser = route(FakeRequest(POST, "/users").withJsonBody(Json.toJson(fakeUser))).get
@@ -459,13 +461,13 @@ class UsersSpec extends Specification {
       contentAsString(users5) must contain("\"age\":18")
 
 
-      val deleteuser = route(FakeRequest(DELETE, "/users/" + fakeUser.id)).get
+      val deleteuser = route(FakeRequest(DELETE, "/users/" + fakeUser.id.get)).get
       status(deleteuser) must equalTo(OK)
       contentType(deleteuser) must beNone
       contentAsBytes(deleteuser).length must equalTo(0)
     }
 
-    "A user should not be queryable by an array of Ints with no matching element" in new WithApplication {
+    "A user should not be queryable by an array of Ints with no matching element" in new WithApplication(fakeApplicationWithGlobal) {
       val fakeUser = makeUser
 
       val createuser = route(FakeRequest(POST, "/users").withJsonBody(Json.toJson(fakeUser))).get
@@ -479,7 +481,7 @@ class UsersSpec extends Specification {
       contentType(users7) must beSome.which(_ == "application/json")
       contentAsString(users7) must not contain ("\"age\":18")
 
-      val deleteuser = route(FakeRequest(DELETE, "/users/" + fakeUser.id)).get
+      val deleteuser = route(FakeRequest(DELETE, "/users/" + fakeUser.id.get)).get
       status(deleteuser) must equalTo(OK)
       contentType(deleteuser) must beNone
       contentAsBytes(deleteuser).length must equalTo(0)

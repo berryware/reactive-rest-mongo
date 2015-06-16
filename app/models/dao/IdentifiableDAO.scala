@@ -37,6 +37,11 @@ trait IdentifiableDAO[T <: Identifiable] extends MongoDao[T] {
 
   def remove(document: T): Future[Try[Int]] = super.remove(document.id)
 
+  // TODO: look to make deletes faster by id $in list
+  def remove(documents: List[T]): Future[List[Try[Int]]] = Future.sequence(documents.map{ document => super.remove(document.id) })
+
+  def update(documents: List[T])(implicit writer: BSONDocumentWriter[T]): Future[List[Try[Int]]] = Future.sequence(documents.map{ document => super.update(document.id, document) })
+
   def findById(document: T)(implicit reader: BSONDocumentReader[T]): Future[Option[T]] = super.findById(document.id)
 
 }
