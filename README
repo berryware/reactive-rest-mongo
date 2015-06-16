@@ -1,7 +1,9 @@
 reactive-rest-mongo
 ===================
 
-This project implements a rest api pattern using Scala, Play, ReactiveMongo, and MongoDB. It provides built-in Rest API processing so that a minimal number of files need to be added for new api calls. For each domain object that needs to be served up via the api, a new domain case class and object need to be created, a new empty controller file is created,  and new routes added to the play routes file. That's it.
+This project implements a rest api pattern using Scala 2.11.x, Activator, ReactiveMongo, and MongoDB. It provides built-in Rest API processing so that a minimal number of files need to be added for new api calls. For each domain object that needs to be served up via the api, a new domain case class and object need to be created, a new empty controller file is created,  and new routes added to the play routes file. That's it.
+
+This code has been used in production now since June 2015
 
 This project is based on the work of Pedro De Almeida https://gist.github.com/almeidap/5685801, the work of Trialfire's Max Kremer and Marconi Lanna http://www.slideshare.net/MaxKremer/play-scala-reactive-mongo, StormPath http://docs.stormpath.com/rest/product-guide/#rest-api-general-concepts, and Eugene Burmako's reflection help
 
@@ -18,25 +20,21 @@ When I first built this api there was not a lot of documentation on how to do al
 
 If you want to know how it works start with test/controllers/UserSpec. UserSpec tests all the features of the Rest API framework.
 
-To run the tests:
-1. spinup an instance of mongodb that is available on localhost. If mongodb is at a different address than localhost, change the mongodb url in application.conf
-2. Run play in the project directory. Type test
+Tests can be run using either activator or sbt
 
-berryware:reactive-rest-mongo dberry$ play
+To run the tests with activator:
+cd reactive-rest-mongo
+dberry $ activator
 [info] Loading project definition from /Users/dberry/project/exaxis/reactive-rest-mongo/project
 [info] Set current project to reactive-rest-mongo (in build file:/Users/dberry/project/exaxis/reactive-rest-mongo/)
-       _
- _ __ | | __ _ _  _
-| '_ \| |/ _' | || |
-|  __/|_|\____|\__ /
-|_|            |__/
-
-play 2.2.2 built with Scala 2.10.3 (running Java 1.7.0_51), http://www.playframework.com
-
-> Type "help play" or "license" for more information.
-> Type "exit" or use Ctrl+D to leave this console.
-
 [reactive-rest-mongo] $ test
 
+To run the tests with sbt:
+cd reactive-rest-mongo
+dberry $ sbt
+Use of ~/.sbtconfig is deprecated, please migrate global settings to /usr/local/etc/sbtopts
+[info] Loading project definition from /Users/dberry/project/exaxis/reactive-rest-mongo/project
+[info] Set current project to reactive-rest-mongo (in build file:/Users/dberry/project/exaxis/reactive-rest-mongo/)
+[reactive-rest-mongo] $ test
 
 You can also run the project and use curl to exercise the REST API
