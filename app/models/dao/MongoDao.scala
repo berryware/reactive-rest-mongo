@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2014 Exaxis, LLC.
+ * Copyright (c) 2013-2015 Exaxis, LLC.
  *
  * All rights reserved.
  *
@@ -82,36 +82,36 @@ trait MongoDao[T] extends DaoHelper {
     collection.find(query).sort(sort).cursor[T].collect[List]()
   }
 
-  def findAll(filter: Option[String], orderby: Option[String], params: Map[String, String])(implicit reader: BSONDocumentReader[T], filterSet:FilterSet[T], attrMap:AttributeMap[T], tag : TypeTag[T] ): Future[List[T]] = {
+  def findAll(filter: Option[String], orderby: Option[String], params: Map[String, String])(implicit reader: BSONDocumentReader[T], daoData:DaoData[T], tag : TypeTag[T] ): Future[List[T]] = {
     // Execute the query
-    findAll(buildQueryDocument(filter, params, filterSet, attrMap), buildSortDocument(orderby, attrMap))
+    findAll(buildQueryDocument(filter, params, daoData), buildSortDocument(orderby, daoData.attributeMap))
   }
 
-  def find(filter: Option[String], orderby: Option[String], page: Int, ipp: Int, params: Map[String, String])(implicit reader: BSONDocumentReader[T], filterSet:FilterSet[T], attrMap:AttributeMap[T], tag : TypeTag[T] ): Future[(List[T], Int)] = {
+  def find(filter: Option[String], orderby: Option[String], page: Int, ipp: Int, params: Map[String, String])(implicit reader: BSONDocumentReader[T], daoData:DaoData[T], tag : TypeTag[T] ): Future[(List[T], Int)] = {
   // Execute the query
-    find(buildQueryDocument(filter, params, filterSet, attrMap), buildSortDocument(orderby, attrMap), page, ipp)
+    find(buildQueryDocument(filter, params, daoData), buildSortDocument(orderby, daoData.attributeMap), page, ipp)
   }
 
-  private def buildSortDocument(orderby: Option[String], attrMap:AttributeMap[T]) = orderby match {
+  private def buildSortDocument(orderby: Option[String], attributeMap:Map[String,String]) = orderby match {
     case None => Logger.debug("orderby = None"); BSONDocument.empty
     case Some(sorts) => Logger.debug("orderby = "+sorts);
       sorts.split(",").foldLeft(BSONDocument.empty) {
         (doc, s) =>
           s.split(" ").toList match {
-            case a :: Nil => doc ++ (attrMap.attributeMap.getOrElse(a, a) -> 1)
-            case a :: b :: Nil => doc ++ (attrMap.attributeMap.getOrElse(a, a) -> b.toInt)
+            case a :: Nil => doc ++ (attributeMap.getOrElse(a, a) -> 1)
+            case a :: b :: Nil => doc ++ (attributeMap.getOrElse(a, a) -> b.toInt)
             case _ => doc ++ ()
           }
       }
   }
 
-  private def buildQueryDocument(filter: Option[String], params: Map[String, String], filterSet:FilterSet[T], attrMap:AttributeMap[T])(implicit tag : TypeTag[T] ) = {
+  private def buildQueryDocument(filter: Option[String], params: Map[String, String], daoData:DaoData[T])(implicit tag : TypeTag[T] ) = {
     val leftDocument = filter match {
               case None => Logger.debug("q = None"); BSONDocument.empty
               case Some(s) => Logger.debug("q = "+s)
-                BSONDocument( "$or" -> filterSet.filterSet.foldLeft(BSONArray.empty) { (arr, attr) => arr ++  BSONDocument(attr -> BSONRegex(".*" + s + ".*", "i")) })
+                BSONDocument( "$or" -> daoData.filterSet.foldLeft(BSONArray.empty) { (arr, attr) => arr ++  BSONDocument(attr -> BSONRegex(".*" + s + ".*", "i")) })
             }
-    val rightDocument = buildAttributeDocument(params, attrMap)
+    val rightDocument = buildAttributeDocument(params, daoData.attributeMap)
     if (!leftDocument.isEmpty && !rightDocument.isEmpty)
       BSONDocument("$and" -> (BSONArray.empty ++ leftDocument ++ rightDocument))
     else if (!leftDocument.isEmpty)
@@ -123,9 +123,9 @@ trait MongoDao[T] extends DaoHelper {
 
   }
 
-  private def buildAttributeDocument(params: Map[String, String], attrMap:AttributeMap[T] )(implicit tag : TypeTag[T] ) = {
+  private def buildAttributeDocument(params: Map[String, String], attributeMap:Map[String,String] )(implicit tag : TypeTag[T] ) = {
     params.keys.foldLeft(BSONDocument.empty) {
-      (doc,key) => doc ++ processAttribute(key, params.get(key).get, attrMap.attributeMap.getOrElse(key, key))
+      (doc,key) => doc ++ processAttribute(key, params.get(key).get, attributeMap.getOrElse(key, key))
     }
   }
 
@@ -227,9 +227,9 @@ trait MongoDao[T] extends DaoHelper {
     totalpages
   }
 
-  def findOne(paramMap:Map[String, String])(implicit reader: BSONDocumentReader[T], attrMap:AttributeMap[T], tag : TypeTag[T] ): Future[Option[T]] = {
+  def findOne(paramMap:Map[String, String])(implicit reader: BSONDocumentReader[T], daoData:DaoData[T], tag : TypeTag[T] ): Future[Option[T]] = {
     Logger.debug(s"Finding one: [collection=$collectionName, paramMap=$paramMap]")
-    findOne(buildAttributeDocument(paramMap, attrMap))
+    findOne(buildAttributeDocument(paramMap, daoData.attributeMap))
   }
 
   def findOne(query: BSONDocument = BSONDocument.empty)(implicit reader: BSONDocumentReader[T]): Future[Option[T]] = {
@@ -268,8 +268,8 @@ trait MongoDao[T] extends DaoHelper {
     tryIt(collection.update(DBQueryBuilder.id(id), DBQueryBuilder.unset(field)))
   }
 
-  def remove(filter: Option[String], params: Map[String, String])(implicit filterSet:FilterSet[T], attrMap:AttributeMap[T], tag : TypeTag[T] ): Future[Try[Int]] = {
-    val queryDoc = buildQueryDocument(filter, params, filterSet, attrMap)
+  def remove(filter: Option[String], params: Map[String, String])(implicit daoData:DaoData[T], tag : TypeTag[T] ): Future[Try[Int]] = {
+    val queryDoc = buildQueryDocument(filter, params, daoData)
     if (queryDoc.isEmpty)
       Future {
         Failure(new IllegalArgumentException(Messages("noArgumentsProvided")))

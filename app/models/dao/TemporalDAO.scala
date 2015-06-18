@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2014 Exaxis, LLC.
+ * Copyright (c) 2013-2015 Exaxis, LLC.
  *
  * All rights reserved.
  *
@@ -25,7 +25,12 @@ package models.dao
 import models.Temporal
 
 /**
- * Created by dberry on 7/3/14.
+ * TemporalDAO is a trait that adds methods to MongoDAO that work with Temporal.
+ *
+ * Specific methods that rely on the created or updated attributes should be included here in
+ * the TemporalDAO
+ *
+ * @author dberry
  */
 trait TemporalDAO[T <: Temporal] extends IdentifiableDAO[T] {
 

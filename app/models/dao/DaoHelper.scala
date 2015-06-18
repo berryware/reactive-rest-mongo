@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2014 Exaxis, LLC.
+ * Copyright (c) 2013-2015 Exaxis, LLC.
  *
  * All rights reserved.
  *
@@ -27,7 +27,8 @@ import scala.util.{Try, Success, Failure}
 import reactivemongo.core.commands.LastError
 
 /**
- * Base DAO for MongoDB resources.
+ * DaoHelper contains the error handling used by all the DAO classes. The idea is that whether it is mongo,
+ * cassandra, or any other database. The error handling should be the same.
  *
  * @author      Pedro De Almeida (almeidap)
  */
@@ -35,6 +36,14 @@ trait DaoHelper {
 
   implicit def ec: ExecutionContext = ExecutionContext.Implicits.global
 
+  /**
+   * Execute a function that returns a Future[LastError] and return a Future[Try[Int]]. The Int that is returned
+   * is the number of documents, records, etc that were effected by the operation.
+   *
+   * @param operation - a function that returns a Future[LastError]
+   * @return - a Future[Try[Int]].
+   */
+  // TODO: Need to replace LastError with something that is not Mongo specific
   def tryIt(operation: Future[LastError]): Future[Try[Int]] = operation.map {
     lastError =>
       lastError.inError match {

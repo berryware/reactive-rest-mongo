@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2014 Exaxis, LLC.
+ * Copyright (c) 2013-2015 Exaxis, LLC.
  *
  * All rights reserved.
  *
@@ -26,11 +26,17 @@ import org.joda.time.DateTime
 
 
 /**
-  * Base model for `temporal` documents.
+  * Base model for `temporal` documents. It adds created and updated attributes to the class
   *
   * @author      Pedro De Almeida (almeidap)
   */
 trait Temporal extends Identifiable{
+	/**
+	 * The timestamp of when the document was first created
+	 */
 	 val created: Option[DateTime]
+	/**
+	 * The timestamp of when the document was last updated
+	 */
 	 val updated: Option[DateTime]
 }

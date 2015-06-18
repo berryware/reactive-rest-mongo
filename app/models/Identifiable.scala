@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2014 Exaxis, LLC.
+ * Copyright (c) 2013-2015 Exaxis, LLC.
  *
  * All rights reserved.
  *
@@ -23,8 +23,14 @@
 package models
 
 /**
- * Created by dberry on 7/3/14.
+ * The Identifiable trait adds the id field into the domain or business object that will be used to pull information in or out of the data store
+ *
+ * @author dberry
  */
 trait Identifiable {
+  /**
+   * id is an option field. There are times when you need to create an instance of the class and do not have the ability to assign a valid id for the
+   * datastore so the id must be an option.
+   */
   val id: Option[String]
 }

@@ -13,13 +13,13 @@ GET           /users/:id                  controllers.Users.getById(id:String)
 # Retrieve a paginated list of users
 GET           /users                      controllers.Users.list(p:Int ?= 1, ipp:Int ?= 25, q:Option[String], s:Option[String])
 
-# Delete a user, user must be authorized
+# Delete a user
 DELETE        /users/:id                  controllers.Users.delete(id:String)
 
-# Delete a user, user must be authorized
+# Delete a user
 DELETE        /users                      controllers.Users.deleteList(q:Option[String])
 
-# Create a user, user must be authorized
+# Create a user
 POST          /users                      controllers.Users.create()
 
 # Update a user

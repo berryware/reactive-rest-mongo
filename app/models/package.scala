@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2014 Exaxis, LLC.
+ * Copyright (c) 2013-2015 Exaxis, LLC.
  *
  * All rights reserved.
  *
@@ -21,18 +21,24 @@
  */
 
 /**
- * Created by dberry on 19/3/14.
+ * package object for the models package.
+ *
+ * @author dberry
  */
 package object models {
-  /**
-    * ServiceUri is an Enumeration that keeps the keys that are used to get the Service URIs from
-    * application.conf
-    */
-   trait AttributeMap[T] {
-     val attributeMap:Map[String,String]
-   }
 
-  trait FilterSet[T] {
+  /**
+   * A trait which contains DAO specific paramter information
+   * @tparam T
+   */
+  trait DaoData[T] {
+    /**
+     * defines the mapping of scala attributes to datastore attributes, same named attributes do not need to be mapped
+     */
+    val attributeMap:Map[String,String]
+    /**
+     * defines the attributes that will be matched against a query in the search.
+     */
     val filterSet:Set[String]
   }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2014 Exaxis, LLC.
+ * Copyright (c) 2013-2015 Exaxis, LLC.
  *
  * All rights reserved.
  *
@@ -26,7 +26,14 @@ import models.User
 
 /**
  * Created by dberry on 25/3/14.
+ *
+ * This is the Controller for the User class. It needs to extend the generic DAOController and specify User as the Type parameter.
+ * It also needs to tell the controller what DAO object to use for the class. That's all
+ *
  */
 object Users extends DAOController[User]{
+  /**
+   * This is the dao that will be used by the DAOController. It assigns the class to a collection in mongo and resides in the companion object for User
+   */
   val dao=User.defaultDAO
 }

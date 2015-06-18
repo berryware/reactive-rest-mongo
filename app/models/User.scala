@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2014 Exaxis, LLC.
+ * Copyright (c) 2013-2015 Exaxis, LLC.
  *
  * All rights reserved.
  *
@@ -27,6 +27,20 @@ import models.dao.IdentifiableDAO
 import reactivemongo.bson._
 import reactivemongo.bson.BSONDateTime
 
+/**
+ * The case class for the User Data access object. It needs to extend Identifiable or Temporal to be usable by the
+ * reactive mongo wrapper.
+ *
+ * @param id
+ * @param firstName
+ * @param lastName
+ * @param fullName
+ * @param age
+ * @param email
+ * @param avatarUrl
+ * @param created
+ * @param updated
+ */
 case class User (
   id : Option[String],
   firstName: String,
@@ -39,40 +53,61 @@ case class User (
   updated : Option[DateTime]
 ) extends Temporal
 
+/**
+ * This is the companion object for the User case class and contains all the additional mojo needed by the reactive mongo wrapper.
+ *
+ * By mojo we mean that it defines all the implicits that are needed for all the implicit parameters that are defined in all the
+ * downstream libraries.
+ *
+ */
 object User {
   import play.api.libs.json._
 
+  /**
+   * The JSON Formatter needed by the BSONReader and BSONWriter
+   */
   implicit val format = Json.format[User]
 
-  implicit object defaultDAO extends IdentifiableDAO[User]{
+  // define your DAOs here
+  // multiple DAOs can be defined to map a case class with a collection
+
+  /**
+   * This is the defaultDAO associated to the "myusers" collection
+   */
+  implicit val defaultDAO = new IdentifiableDAO[User]{
     val collectionName = "myusers"
   }
 
-  implicit object loggedInDAO extends IdentifiableDAO[User]{
+  /**
+   * This is the loggedInDAO associated to the "loggedInUsers" collection
+   */
+  implicit val loggedInDAO = new IdentifiableDAO[User]{
     val collectionName = "loggedInUsers"
   }
 
-  /**
-   * defines the attributes that will be used in a filtered search
-   */
-  implicit object UserFilterSet extends FilterSet[User] {
-    val filterSet = Set (
+  implicit val UserDaoData = new DaoData[User] {
+    /**
+     * defines the attributes that will be matched against a query in the search.
+     */
+    val filterSet = Set(
       "firstName",
       "lastName",
       "fullName"
     )
-  }
 
-  /**
-   * defines the mapping of scala attributes to datastore attributes, same named attributes do not need to be mapped
-   */
-  implicit object UserAttributeMap extends AttributeMap[User] {
+    /**
+     * defines the mapping of scala attributes to datastore attributes, same named attributes do not need to be mapped
+     */
     val attributeMap = Map (
       "id" -> "_id"
     )
   }
 
-  implicit object UserBSONReader extends BSONDocumentReader[User] {
+  /**
+   * Marshalls a BSONDocument into a User
+   *
+   */
+  implicit val UserBSONReader = new BSONDocumentReader[User] {
     def read(doc: BSONDocument): User =
       User(
         doc.getAs[BSONObjectID]("_id") map { _.stringify},
@@ -87,7 +122,11 @@ object User {
       )
   }
 
-  implicit object UserBSONWriter extends BSONDocumentWriter[User] {
+  /**
+   * Marshalls a User into a BSONDocument
+   *
+   */
+  implicit val UserBSONWriter = new BSONDocumentWriter[User] {
     def write(user: User): BSONDocument =
       BSONDocument(
         "_id" -> user.id.map(BSONObjectID(_)),
@@ -101,7 +140,5 @@ object User {
         "updated" -> BSONDateTime(DateTime.now.getMillis)
       )
   }
-
-
 
 }

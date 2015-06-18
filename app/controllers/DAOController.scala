@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2014 Exaxis, LLC.
+ * Copyright (c) 2013-2015 Exaxis, LLC.
  *
  * All rights reserved.
  *
@@ -30,12 +30,19 @@ import play.api.mvc.Controller
 import play.api.libs.json.{Format, Json}
 import reactivemongo.bson.{BSONDocumentReader, BSONDocumentWriter}
 import models.dao.IdentifiableDAO
-import models.{FilterSet, Pagination, AttributeMap, Identifiable}
+import models._
 import play.api.Logger
 import scala.reflect.runtime.universe.TypeTag
 
 /**
  * Created by dberry on 11/3/14.
+ *
+ * DAOController is a generic Controller that provides all the CRUD services for a domain object. The rest endpoints can call these methods to have
+ * data sent to or retrieved from mongo collecions.
+ *
+ * Type param T must extend identifiable in order to be used by DAOController. Identifiable gives the class an id field that will be used as the key for
+ * the CRUD Operations
+ *
  */
 trait DAOController[T <: Identifiable] extends Controller {
   import ExecutionContext.Implicits.global
@@ -45,6 +52,13 @@ trait DAOController[T <: Identifiable] extends Controller {
   val defaultOffset = 0
   val defaultLimit = 25
 
+  /**
+   * Creates a T in a mongo collection.
+   *
+   * @param writer - The BSONDocumentWriter on the companion object for T
+   * @param fmt - The Json.format[T] on the companion object for T
+   * @return - Action[JsValue]
+   */
   def create()(implicit writer: BSONDocumentWriter[T], fmt:Format[T] ) = Action.async(parse.json) { implicit request =>
     // process the json body
     request.body.validate[T].map { instance =>
@@ -55,6 +69,14 @@ trait DAOController[T <: Identifiable] extends Controller {
     }.getOrElse(Future.successful(BadRequest("invalid json")))
   }
 
+  /**
+   * Gets a T from the mongo collection using its id.
+   *
+   * @param id - id of the T to be retrieved
+   * @param reader - The BSONDocumentReader on the companion object for T
+   * @param fmt - The Json.format[T] on the companion object for T
+   * @return - Action[AnyContent]
+   */
   def getById(id:String)(implicit reader: BSONDocumentReader[T], fmt:Format[T]) = Action.async {
     dao.findById(Some(id)).map {
       case None => NotFound
@@ -64,7 +86,15 @@ trait DAOController[T <: Identifiable] extends Controller {
     }
    }
 
-  def getByAlt()(implicit reader: BSONDocumentReader[T], fmt:Format[T], attrMap: AttributeMap[T], tag : TypeTag[T] ) = Action.async { request =>
+  /**
+   * Gets a T from the mongo collection using the url parameters as the keys
+   *
+   * @param reader - The BSONDocumentReader on the companion object for T
+   * @param daoData - DaoSpecific data that must be passed along. Defined on the companion object for T
+   * @param tag - Reflection info for T
+   * @return - Action[AnyContent]
+   */
+  def getByAlt()(implicit reader: BSONDocumentReader[T], fmt:Format[T], daoData:DaoData[T], tag : TypeTag[T] ) = Action.async { request =>
     val paramMap = request.queryString.map {
           case (k, v) => Logger.debug(k+"->"+v); k -> v.mkString
     }
@@ -76,7 +106,13 @@ trait DAOController[T <: Identifiable] extends Controller {
     }
    }
 
-
+  /**
+   * Updates a T based on its id. It retrieves the T from the request object.
+   *
+   * @param writer - The BSONDocumentWriter on the companion object for T
+   * @param fmt - The Json.format[T] on the companion object for T
+   * @return - Action[JsValue]
+   */
   def update()(implicit writer: BSONDocumentWriter[T], fmt:Format[T]) = Action.async(parse.json) { request =>
       // process the json body
       request.body.validate[T].map { instance =>
@@ -87,6 +123,12 @@ trait DAOController[T <: Identifiable] extends Controller {
       }.getOrElse(Future.successful(BadRequest("invalid json")))
     }
 
+  /**
+   * Deletes a T based on its id.
+   *
+   * @param id - id of the T to be deleted
+   * @return - Action[AnyContent] which is a OK or NOT FOUND
+   */
   def delete(id:String) = Action.async {
     dao.remove(Some(id)).map {
       case Failure(t) => BadRequest(t.getLocalizedMessage)
@@ -94,7 +136,15 @@ trait DAOController[T <: Identifiable] extends Controller {
     }
   }
 
-  def deleteList(q: Option[String])(implicit filterSet: FilterSet[T], attrMap: AttributeMap[T], tag : TypeTag[T] ) = Action.async { request =>
+  /**
+   * Deletes documents where the query matches data in the filter set
+   *
+   * @param q - A query that gets turned into a regex, and searches all fields listed in the DAOs Filter Set
+   * @param daoData - DaoSpecific data that must be passed along. Defined on the companion object for T
+   * @param tag - Reflection info for T
+   * @return - Action[AnyContent] containingg the count of documents deleted or an error message
+   */
+  def deleteList(q: Option[String])(implicit daoData:DaoData[T], tag : TypeTag[T] ) = Action.async { request =>
     val paramMap = request.queryString.map {
       case (k, v) => Logger.debug(k+"->"+v); k -> v.mkString
     } - "q"
@@ -106,20 +156,20 @@ trait DAOController[T <: Identifiable] extends Controller {
   }
 
   /**
+   * Retrieves a single page list of T.
    *
-   * @param p The page that is being requested.
-   * @param ipp Items per page
-   * @param q A query that gets turned into a regex, .*q.* this gets used from search pages, and searches all fields listed in the DAOs Filter Set
-   * @param s This is the sort order. It is in the format of field1,field2 1, field3 -1. Which is field1 asc, field2 desc, field3 asc
-   * @param reader
-   * @param fmt
-   * @param pgfmt
-   * @param filterSet
-   * @param attrMap
-   * @param tag
-   * @return
+   * @param p - The page that is being requested.
+   * @param ipp - Items per page
+   * @param q - A query that gets turned into a regex, .*q.* this gets used from search pages, and searches all fields listed in the DAOs Filter Set
+   * @param s - This is the sort order. It is in the format of field1,field2 1, field3 -1. Which is field1 asc, field2 desc, field3 asc
+   * @param reader - The BSONDocumentReader on the companion object for T
+   * @param fmt - The Json.format[T] on the companion object for T
+   * @param pgfmt - The Json.format[Pagination] on the companion object for Pagination
+   * @param daoData - DaoSpecific data that must be passed along. Defined on the companion object for T
+   * @param tag - Reflection info for T
+   * @return - Action[AnyContent]
    */
-  def list(p:Int, ipp: Int, q: Option[String], s: Option[String])(implicit reader: BSONDocumentReader[T], fmt: Format[T], pgfmt: Format[Pagination], filterSet: FilterSet[T], attrMap: AttributeMap[T], tag : TypeTag[T] ) = Action.async {
+  def list(p:Int, ipp: Int, q: Option[String], s: Option[String])(implicit reader: BSONDocumentReader[T], fmt: Format[T], pgfmt: Format[Pagination], daoData:DaoData[T], tag : TypeTag[T] ) = Action.async {
     request => // get all the params that are not know params
       val paramMap = request.queryString.map {
         case (k, v) => Logger.debug(k+"->"+v); k -> v.mkString

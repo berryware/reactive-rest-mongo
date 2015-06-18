@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2014 Exaxis, LLC.
+ * Copyright (c) 2013-2015 Exaxis, LLC.
  *
  * All rights reserved.
  *
@@ -35,27 +35,99 @@ import reactivemongo.bson._
  */
 object DBQueryBuilder {
 
+	/**
+	 * Convert a BSONObjectID to a BSONDocument containing the _id field name and the BSONObjectID.
+	 *
+	 * @param objectId - The BSONObjectID
+	 * @return - a BSONDocument
+	 */
 	def id(objectId: BSONObjectID): BSONDocument = BSONDocument("_id" -> objectId)
 
+	/**
+	 * Convert an Option[String] to a BSONDocument containing the _id field name and the BSONObjectID.
+	 * If the Option[String] is None it sets _id to BSONUndefined
+	 *
+	 * @param objectId
+	 * @return - a BSONDocument
+	 */
   def id(objectId: Option[String]): BSONDocument = objectId match {
      case None => BSONDocument("_id" -> BSONUndefined)
      case Some(s) => id(BSONObjectID(s))
    }
 
+	/**
+	 * Set a BSONDocument containing the field and BSONDocument data
+	 *
+	 * @param field  - The string name of the field to be set
+	 * @param data - The BSONDocument data to be set for the specific field
+	 * @return - a BSONDocument
+	 */
 	def set(field: String, data: BSONDocument): BSONDocument = set(BSONDocument(field -> data))
 
+	/**
+	 * Set a BSONDocument containing the field and T data
+	 *
+	 * @param field - The string name of the field to be set
+	 * @param data - The T data to be set for the specific field
+	 * @param writer - The BSONDocumentWriter for mashalling the T to a BSONDocument
+	 * @tparam T - The type parameter T
+	 * @return - a BSONDocument
+	 */
 	def set[T](field: String, data: T)(implicit writer: BSONDocumentWriter[T]): BSONDocument = set(BSONDocument(field -> data))
 
+	/**
+	 * Sets the data
+	 *
+	 * @param data - The T data to be set
+	 * @return - a BSONDocument
+	 */
 	def set(data: BSONDocument): BSONDocument = BSONDocument("$set" -> data)
 
+	/**
+	 * Sets the data
+	 *
+	 * @param data - The T data to be set
+	 * @param writer - The BSONDocumentWriter for mashalling the T to a BSONDocument
+	 * @tparam T - The type parameter T
+	 * @return - a BSONDocument
+	 */
 	def set[T](data: T)(implicit writer: BSONDocumentWriter[T]): BSONDocument = BSONDocument("$set" -> data)
 
+	/**
+	 * Push a BSONDocument containing the field and the data
+	 *
+	 * @param field - The string name of the field to push
+	 * @param data - The T data to be assigned to the field to push
+	 * @param writer - The BSONDocumentWriter for mashalling the T to a BSONDocument
+	 * @tparam T - The type parameter T
+	 * @return - a BSONDocument
+	 */
 	def push[T](field: String, data: T)(implicit writer: BSONDocumentWriter[T]): BSONDocument = BSONDocument("$push" -> BSONDocument(field -> data))
 
+	/**
+	 *
+	 * @param field - The string name of the field to pull
+	 * @param query
+	 * @param writer - The BSONDocumentWriter for mashalling the T to a BSONDocument
+	 * @tparam T - The type parameter T
+	 * @return - a BSONDocument
+	 */
 	def pull[T](field: String, query: T)(implicit writer: BSONDocumentWriter[T]): BSONDocument = BSONDocument("$pull" -> BSONDocument(field -> query))
 
+	/**
+	 *
+	 * @param field - The string name of the field to be unset
+	 * @return - a BSONDocument
+	 */
 	def unset(field: String): BSONDocument = BSONDocument("$unset" -> BSONDocument(field -> 1))
 
+	/**
+	 * Increment a specific field by a specific amount
+	 *
+	 * @param field - The string name of the field to be incremented
+	 * @param amount - The amount to add to the field
+	 * @return - a BSONDocument
+	 */
 	def inc(field: String, amount: Int) = BSONDocument("$inc" -> BSONDocument(field -> amount))
 
 }

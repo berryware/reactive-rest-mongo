@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2014 Exaxis, LLC.
+ * Copyright (c) 2013-2015 Exaxis, LLC.
  *
  * All rights reserved.
  *
@@ -23,7 +23,12 @@
 package models
 
 /**
- * Created by dberry on 19/3/14.
+ * The pagination class is used to return pagination information along with the list of data
+ *
+ * @author dberry
+ * @param page - the page number of the page of data being returned
+ * @param itemsPerPage - the items per page
+ * @param totalPages - the total pages
  */
 case class Pagination (
   page: Int
@@ -31,9 +36,15 @@ case class Pagination (
   ,totalPages: Int
 )
 
+/**
+ * The companion object for Pagination
+ */
 object Pagination {
   import play.api.libs.json._
 
+  /**
+   * The JSON Formatter needed by the BSONReader and BSONWriter
+   */
   implicit val format = Json.format[Pagination]
 
 }
