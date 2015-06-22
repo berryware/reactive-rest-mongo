@@ -38,3 +38,12 @@ Use of ~/.sbtconfig is deprecated, please migrate global settings to /usr/local/
 [reactive-rest-mongo] $ test
 
 You can also run the project and use curl to exercise the REST API
+
+
+To set up the mongo db on OSX using brew:
+
+brew install mongodb
+mkdir -p /data/db
+mongod --dbpath /data/db
+
+
