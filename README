@@ -42,8 +42,18 @@ You can also run the project and use curl to exercise the REST API
 
 To set up the mongo db on OSX using brew:
 
-brew install mongodb
-mkdir -p /data/db
-mongod --dbpath /data/db
+# Install Mongo
+  
+  brew install mongodb
+  mkdir -p /data/db
+
+# Start Mongo
+
+  mongod --dbpath /data/db
+
+
+The following curl request will result in an error that lists the available endpoitns:
+
+  http://localhost:9000/user
 
 
