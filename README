@@ -52,7 +52,7 @@ To set up the mongo db on OSX using brew:
   mongod --dbpath /data/db
 
 
-The following curl request will result in an error that lists the available endpoitns:
+The following curl request will result in an error that lists the available REST endpoints:
 
   http://localhost:9000/user
 
