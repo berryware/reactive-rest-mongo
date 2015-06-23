@@ -64,6 +64,26 @@ object User {
   import play.api.libs.json._
 
   /**
+   * String attribute names for the scala class
+   */
+  val attrId = "id"
+  val attrFirstName = "firstName"
+  val attrLastName = "lastName"
+  val attrFullName = "fullName"
+  val attrAge = "age"
+  val attrEmail = "email"
+  val attrAvatarUrl = "avatarUrl"
+  val attrCreated = "created"
+  val attrUpdated = "updated"
+
+  /**
+   * String attribute names in the data store
+   */
+  val dsId = "_id"
+  val dsAge = "_age"
+
+
+  /**
    * The JSON Formatter needed by the BSONReader and BSONWriter
    */
   implicit val format = Json.format[User]
@@ -85,21 +105,22 @@ object User {
     val collectionName = "loggedInUsers"
   }
 
-  implicit val UserDaoData = new DaoData[User] {
+  implicit val userDaoData = new DaoData[User] {
     /**
      * defines the attributes that will be matched against a query in the search.
      */
     val filterSet = Set(
-      "firstName",
-      "lastName",
-      "fullName"
+      attrFirstName,
+      attrLastName,
+      attrFullName
     )
 
     /**
      * defines the mapping of scala attributes to datastore attributes, same named attributes do not need to be mapped
      */
     val attributeMap = Map (
-      "id" -> "_id"
+      attrId -> dsId,
+      attrAge -> dsAge
     )
   }
 
@@ -110,15 +131,15 @@ object User {
   implicit val UserBSONReader = new BSONDocumentReader[User] {
     def read(doc: BSONDocument): User =
       User(
-        doc.getAs[BSONObjectID]("_id") map { _.stringify},
-        doc.getAs[String]("firstName").get,
-        doc.getAs[String]("lastName").get,
-        doc.getAs[String]("fullName").get,
-        doc.getAs[Int]("age"),
-        doc.getAs[String]("email"),
-        doc.getAs[String]("avatarUrl"),
-        doc.getAs[BSONDateTime]("created").map(dt => new DateTime(dt.value)),
-        doc.getAs[BSONDateTime]("updated").map(dt => new DateTime(dt.value))
+        doc.getAs[BSONObjectID](userDaoData.dataSourceName(attrId)) map { _.stringify},
+        doc.getAs[String](userDaoData.dataSourceName(attrFirstName)).get,
+        doc.getAs[String](userDaoData.dataSourceName(attrLastName)).get,
+        doc.getAs[String](userDaoData.dataSourceName(attrFullName)).get,
+        doc.getAs[Int](userDaoData.dataSourceName(attrAge)),
+        doc.getAs[String](userDaoData.dataSourceName(attrEmail)),
+        doc.getAs[String](userDaoData.dataSourceName(attrAvatarUrl)),
+        doc.getAs[BSONDateTime](userDaoData.dataSourceName(attrCreated)).map(dt => new DateTime(dt.value)),
+        doc.getAs[BSONDateTime](userDaoData.dataSourceName(attrUpdated)).map(dt => new DateTime(dt.value))
       )
   }
 
@@ -129,15 +150,15 @@ object User {
   implicit val UserBSONWriter = new BSONDocumentWriter[User] {
     def write(user: User): BSONDocument =
       BSONDocument(
-        "_id" -> user.id.map(BSONObjectID(_)),
-        "firstName" -> user.firstName,
-        "lastName" -> user.lastName,
-        "fullName" -> user.fullName,
-        "age" -> user.age,
-        "email" -> user.email,
-        "avatarUrl" -> user.avatarUrl,
-        "created" -> user.created.map(date => BSONDateTime(date.getMillis)),
-        "updated" -> BSONDateTime(DateTime.now.getMillis)
+        userDaoData.dataSourceName(attrId) -> user.id.map(BSONObjectID(_)),
+        userDaoData.dataSourceName(attrFirstName) -> user.firstName,
+        userDaoData.dataSourceName(attrLastName) -> user.lastName,
+        userDaoData.dataSourceName(attrFullName) -> user.fullName,
+        userDaoData.dataSourceName(attrAge) -> user.age,
+        userDaoData.dataSourceName(attrEmail) -> user.email,
+        userDaoData.dataSourceName(attrAvatarUrl) -> user.avatarUrl,
+        userDaoData.dataSourceName(attrCreated) -> user.created.map(date => BSONDateTime(date.getMillis)),
+        userDaoData.dataSourceName(attrUpdated) -> BSONDateTime(DateTime.now.getMillis)
       )
   }
 

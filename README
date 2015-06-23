@@ -10,9 +10,10 @@ This project is based on the work of Pedro De Almeida https://gist.github.com/al
 Key Goals met by this framework:
 1. Immutable
 2. Asynchronous
-3. Minimal new files added/updated for every new domain object. New Domain file (case class and companion object), new empty controller which sets the type of the Domain object and new routes are the only files that need to get touched for adding basic rest calls of GET, POST, PUSH, DELETE, and GET (multiple).
-4. A REST api that allows all basic CRUD commands as well as a builtin filtering capability for bringing down or deleting multiple domain objects
-5. A REST api with paging built in
+3. Streaming. Supports the ReactiveMongo Enumerator.
+4. Minimal new files added/updated for every new domain object. New Domain file (case class and companion object), new empty controller which sets the type of the Domain object and new routes are the only files that need to get touched for adding basic rest calls of GET, POST, PUSH, DELETE, and GET (multiple).
+5. A REST api that allows all basic CRUD commands as well as a builtin filtering capability for bringing down or deleting multiple domain objects
+6. A REST api with paging built in
 
 This framework does not use the JSON COAST-TO-COAST capabilities of ReactiveMongo. I found that using BSON and providing specific BSON Readers and Writers gave me the greatest flexibility to use Mongo specific datatypes in the database and only Scala types in the domain objects. It is also very clear from the mappings in the companion object of what is actually transpiring.
 

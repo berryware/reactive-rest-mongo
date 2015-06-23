@@ -40,6 +40,8 @@ package object models {
      * defines the attributes that will be matched against a query in the search.
      */
     val filterSet:Set[String]
+
+    def dataSourceName(attrName:String) = attributeMap.getOrElse(attrName, attrName)
   }
 
 }
