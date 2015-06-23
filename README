@@ -39,3 +39,46 @@ Use of ~/.sbtconfig is deprecated, please migrate global settings to /usr/local/
 [reactive-rest-mongo] $ test
 
 You can also run the project and use curl to exercise the REST API
+
+
+To set up the mongo db on OSX using brew:
+
+# Install Mongo
+  
+  brew install mongodb
+  mkdir -p /data/db
+
+# Start Mongo
+
+  mongod --dbpath /data/db
+  
+  
+  
+
+
+The following curl request will result in an error that lists the available REST endpoints:
+
+  http://localhost:9000/
+
+Example to add a user:
+
+  curl -H "Content-Type: application/json" -X POST -d '{"firstName":"Joe","lastName":"Schmoe", "fullName":"Joe Schmoe", "age": 32, "email":"joe@schmoe.com"}' http://localhost:9000/users
+
+A user _must_ have the following attributes defined:
+
+* firstName: String,
+* lastName: String,
+* fullName: String,
+* age:Option[Int],
+
+A user _may_ define the following attributes:
+
+* id : [String],
+* email: [String],
+* avatarUrl: [String],
+* created : [DateTime],
+* updated : [DateTime]
+
+Example to list users:
+
+  http://localhost:9000/users
