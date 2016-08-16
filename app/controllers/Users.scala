@@ -33,5 +33,5 @@ import scaldi.Injector
  *
  */
 class Users(implicit val injector: Injector) extends DAOController[User] {
-  val collectionName = "myusers"
+  val collectionName = User.collectionName
 }

@@ -82,6 +82,10 @@ object User {
   val dsId = "_id"
   val dsAge = "_age"
 
+  /**
+    * The collection name for storing this object
+    */
+  val collectionName:String = "myusers"
 
   /**
    * The JSON Formatter needed by the BSONReader and BSONWriter
