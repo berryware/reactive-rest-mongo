@@ -23,6 +23,7 @@
 package controllers
 
 import models.User
+import scaldi.Injector
 
 /**
  * Created by dberry on 25/3/14.
@@ -31,9 +32,6 @@ import models.User
  * It also needs to tell the controller what DAO object to use for the class. That's all
  *
  */
-object Users extends DAOController[User]{
-  /**
-   * This is the dao that will be used by the DAOController. It assigns the class to a collection in mongo and resides in the companion object for User
-   */
-  val dao=User.defaultDAO
+class Users(implicit val injector: Injector) extends DAOController[User] {
+  val collectionName = "myusers"
 }

@@ -1,7 +1,11 @@
 reactive-rest-mongo
 ===================
 
-This project implements a rest api pattern using Scala 2.11.x, Activator, ReactiveMongo, and MongoDB. It provides built-in Rest API processing so that a minimal number of files need to be added for new api calls. For each domain object that needs to be served up via the api, a new domain case class and object need to be created, a new empty controller file is created,  and new routes added to the play routes file. That's it.
+This project implements a rest api pattern using Scala 2.11.x, Play 2.5.4, Scaldi, ReactiveMongo, and MongoDB. It provides built-in Rest API processing so that a minimal number of files need to be added for new api calls. For each domain object that needs to be served up via the api, a new domain case class and object need to be created, a new controller file is created that contains the collection name,  and new routes added to the play routes file. That's it.
+
+This project has been updated to use Play 2.5.4 and Dependency Injection. I have chosen Scaldi over Guice as it is based on implicits and not annotations.
+
+Testing is done via ScalaTest and ScalaTest embedded mongo
 
 This code has been used in production now since June 2015
 
@@ -44,16 +48,16 @@ You can also run the project and use curl to exercise the REST API
 To set up the mongo db on OSX using brew:
 
 # Install Mongo
-  
+
   brew install mongodb
   mkdir -p /data/db
 
 # Start Mongo
 
   mongod --dbpath /data/db
-  
-  
-  
+
+
+
 
 
 The following curl request will result in an error that lists the available REST endpoints:

@@ -88,23 +88,6 @@ object User {
    */
   implicit val format = Json.format[User]
 
-  // define your DAOs here
-  // multiple DAOs can be defined to map a case class with a collection
-
-  /**
-   * This is the defaultDAO associated to the "myusers" collection
-   */
-  implicit val defaultDAO = new IdentifiableDAO[User]{
-    val collectionName = "myusers"
-  }
-
-  /**
-   * This is the loggedInDAO associated to the "loggedInUsers" collection
-   */
-  implicit val loggedInDAO = new IdentifiableDAO[User]{
-    val collectionName = "loggedInUsers"
-  }
-
   implicit val userDaoData = new DaoData[User] {
     /**
      * defines the attributes that will be matched against a query in the search.

@@ -22,9 +22,10 @@
 
 package models.dao
 
+import reactivemongo.api.commands.{MultiBulkWriteResult, WriteResult}
+
 import scala.concurrent.{ExecutionContext, Future}
-import scala.util.{Try, Success, Failure}
-import reactivemongo.core.commands.LastError
+import scala.util.{Failure, Success, Try}
 
 /**
  * DaoHelper contains the error handling used by all the DAO classes. The idea is that whether it is mongo,
@@ -37,18 +38,35 @@ trait DaoHelper {
   implicit def ec: ExecutionContext = ExecutionContext.Implicits.global
 
   /**
-   * Execute a function that returns a Future[LastError] and return a Future[Try[Int]]. The Int that is returned
+   * Execute a function that returns a Future[WriteResult] and return a Future[Try[Int]]. The Int that is returned
    * is the number of documents, records, etc that were effected by the operation.
    *
-   * @param operation - a function that returns a Future[LastError]
-   * @return - a Future[Try[Int]].
+   * @param operation - a function that returns a Future[WriteResult]
+   * @return - a Future Try[Int].
    */
-  // TODO: Need to replace LastError with something that is not Mongo specific
-  def tryIt(operation: Future[LastError]): Future[Try[Int]] = operation.map {
-    lastError =>
-      lastError.inError match {
-        case true => Failure(lastError.getCause)
-        case false => Success(lastError.updated)
+  // TODO: Need to replace WriteResult with something that is not Mongo specific
+  def tryIt(operation: Future[WriteResult]): Future[Try[Int]] = operation.map {
+    writeResult =>
+      writeResult.inError match {
+        case true => Failure(new Exception(writeResult.message))
+        case false => Success(writeResult.n)
+      }
+  } recover {
+    case throwable => Failure(throwable)
+  }
+
+  /**
+   * Execute a function that returns a Future[MultiBulkWriteResult] and return a Future[Try[Int]]. The Int that is returned
+   * is the number of documents, records, etc that were effected by the operation.
+   *
+   * @param operation - a function that returns a Future[MultiBulkWriteResult]
+   * @return - a Future Try[Int].
+   */
+  def multiTryIt(operation: Future[MultiBulkWriteResult]): Future[Try[Int]] = operation.map {
+    writeResult =>
+      writeResult.errmsg match {
+        case Some(msg) => Failure(new Exception(msg))
+        case None => Success(writeResult.totalN)
       }
   } recover {
     case throwable => Failure(throwable)

@@ -22,29 +22,22 @@
 
 package models.dao
 
-import play.api.cache.Cache
-import play.modules.reactivemongo.ReactiveMongoPlugin
-import reactivemongo.bson._
-import scala.concurrent.duration.Duration
-import scala.concurrent.{Await, ExecutionContext, Future}
-import scala.util.{Try, Success, Failure}
-import play.api.Logger
-import reactivemongo.core.commands.Count
 import models._
-import play.api.i18n.Messages
-import scala.reflect.runtime.universe._
 import org.joda.time.DateTime
-import reactivemongo.bson.BSONBoolean
-import reactivemongo.bson.BSONDouble
-import reactivemongo.bson.BSONDateTime
-import scala.util.Failure
+import play.api.Logger
+import play.api.cache.CacheApi
+import play.api.i18n.MessagesApi
+import play.modules.reactivemongo.ReactiveMongoApi
 import reactivemongo.api.QueryOpts
-import reactivemongo.bson.BSONLong
-import reactivemongo.bson.BSONInteger
-import reactivemongo.bson.BSONRegex
-import reactivemongo.api.collections.default.BSONCollection
-import play.api.libs.iteratee.Enumerator
-import play.api.cache.Cache
+import reactivemongo.api.collections.bson.BSONCollection
+import reactivemongo.bson.{BSONBoolean, BSONDateTime, BSONDouble, BSONInteger, BSONLong, BSONRegex, _}
+import reactivemongo.core.commands.Count
+import scaldi.{Injectable, Injector}
+
+import scala.concurrent.duration.Duration
+import scala.concurrent.{Await, Future}
+import scala.reflect.runtime.universe._
+import scala.util.{Failure, Try}
 
 /**
  * MongoDAO[T] is a wrapper around the reactiveMongo libraries to consolidate all the common code that each individual class
@@ -53,41 +46,46 @@ import play.api.cache.Cache
  *
  * Created by dberry on 13/3/14.
  */
-trait MongoDao[T] extends DaoHelper {
+trait MongoDao[T] extends DaoHelper with Injectable {
 
   /**
    * The name of the collection in the mongo database. This will be defined in the companion object for T
    */
   val collectionName: String
 
-  import play.api.Play.current
+  implicit val injector: Injector
+  val reactiveMongoApi : ReactiveMongoApi = inject [ReactiveMongoApi]
+  val messagesApi:MessagesApi = inject [MessagesApi]
+  val cacheApi:CacheApi = inject [CacheApi]
 
   /**
    * The reactive mongo collection to perform all the mongo calls
    *
    * @return - BSONCollection
    */
-  def collection = ReactiveMongoPlugin.db.collection[BSONCollection](collectionName)
+  lazy val collection = reactiveMongoApi.db.collection[BSONCollection](collectionName)
 
   /**
    * Inserts a list of T into mongo
    *
    * @param docList - List of T
    * @param writer - The BSONDocumentWriter on the companion object for T
-   * @return - a Future[Try[Int]]
+   * @return - a Future Try[Int]
    */
-  def insert(docList: List[T])(implicit writer: BSONDocumentWriter[T]): Future[Try[Int]] = {
+  def insert(docList: List[T], ordered:Boolean=false)(implicit writer: BSONDocumentWriter[T]): Future[Try[Int]] = {
     Logger.debug(s"Inserting document: [collection=$collectionName, data=$docList]")
-    val enumerator = Enumerator.enumerate(docList.map( t => writer.write(t)))
-    collection.bulkInsert(enumerator).map{ Success(_)}
+    // prepare the person documents to be inserted
+    val bulkDocs = docList.map(implicitly[collection.ImplicitlyDocumentProducer](_))
+    multiTryIt(collection.bulkInsert(ordered=true)(bulkDocs: _*))
   }
+
 
   /**
    * Insert a T into mongo
    *
    * @param document - a T
    * @param writer - The BSONDocumentWriter on the companion object for T
-   * @return - a Future[Try[Int]]
+   * @return - a Future Try[Int]
    */
   def insert(document: T)(implicit writer: BSONDocumentWriter[T]): Future[Try[Int]] = {
     Logger.debug(s"Inserting document: [collection=$collectionName, data=$document]")
@@ -99,7 +97,7 @@ trait MongoDao[T] extends DaoHelper {
    *
    * @param id - an Option[String]
    * @param reader - The BSONDocumentReader on the companion object for T
-   * @return - Future[Option[T]]
+   * @return - a Future Option[T]
    */
   def findById(id: Option[String])(implicit reader: BSONDocumentReader[T]): Future[Option[T]] = findOne(DBQueryBuilder.id(id))
 
@@ -108,7 +106,7 @@ trait MongoDao[T] extends DaoHelper {
    *
    * @param id - a BSONObjectID
    * @param reader - The BSONDocumentReader on the companion object for T
-   * @return - Future[Option[T]]
+   * @return - a Future Option[T]
    */
   def findById(id: BSONObjectID)(implicit reader: BSONDocumentReader[T]): Future[Option[T]] = findOne(DBQueryBuilder.id(id))
 
@@ -118,7 +116,7 @@ trait MongoDao[T] extends DaoHelper {
    * @param query - a BSONDocument containing query information
    * @param sort - a BSONDocument containing sort information
    * @param reader - The BSONDocumentReader on the companion object for T
-   * @return - Future[List[T]]
+   * @return - a Future List[T]
    */
   def findAll(query: BSONDocument = BSONDocument.empty, sort: BSONDocument = BSONDocument.empty)(implicit reader: BSONDocumentReader[T]): Future[List[T]] = {
     Logger.debug(s"Finding documents: [collection=$collectionName, query=$query]")
@@ -134,7 +132,7 @@ trait MongoDao[T] extends DaoHelper {
    * @param reader - The BSONDocumentReader on the companion object for T
    * @param daoData - The filterset and attribute map information for T
    * @param tag - Type information for T
-   * @return - Future[List[T]]
+   * @return - Future List[T]
    */
   def findAll(filter: Option[String], orderby: Option[String], params: Map[String, String])(implicit reader: BSONDocumentReader[T], daoData:DaoData[T], tag : TypeTag[T] ): Future[List[T]] = {
     // Execute the query
@@ -208,7 +206,8 @@ trait MongoDao[T] extends DaoHelper {
 
   /**
    * Parses the params and turns it into a BSONDocument containing the matching information of attr->value
-   * @param params - params that contain search criteria
+    *
+    * @param params - params that contain search criteria
    * @param attributeMap - mapping of scala to mongo attributes
    * @param tag - Type information for T
    * @return BSONDocument
@@ -301,8 +300,7 @@ trait MongoDao[T] extends DaoHelper {
    * @param sval - the string value of the attribute
    * @param tag - the scala type tag for the attribute
    * @return - BSONValue
-   *
-   * @note WARNING - This method uses EXPERIMENTAL reflection code from scala. Scala does not guarantee backwards compatibility in their releases.
+    * @note WARNING - This method uses EXPERIMENTAL reflection code from scala. Scala does not guarantee backwards compatibility in their releases.
    * @note If you upgrade scala and this method no longer compiles then it MUST be fixed using whatever new classes, methods, etc that the scala team
    * @note decided to go with. I would rather have this than living with things like type erasure for backwards compatibility. If you do not know what
    * @note type erasure is then please put this code down, step away from the code, and let a more informed person work on this code.
@@ -373,10 +371,10 @@ trait MongoDao[T] extends DaoHelper {
   private def getTotalPages(query:BSONDocument, ipp:Int) = {
     val key = collectionName + ":" + BSONDocument.pretty(query)
     Logger.debug("Query key = "+key)
-    val totaldocs = Cache.getOrElse[Int](key) {
-      val total = Await.result(ReactiveMongoPlugin.db.command(Count(collectionName, Some(query))), Duration.Inf)
+    val totaldocs = cacheApi.getOrElse[Int](key) {
+      val total = Await.result(reactiveMongoApi.db.command(Count(collectionName, Some(query))), Duration.Inf)
       Logger.debug(s"Caching query total docs $total")
-      Cache.set(key, total, 60)
+      cacheApi.set(key, total, Duration.fromNanos(60000))
       total
     }
     val totalpages:Int = (totaldocs/ipp)+1
@@ -391,7 +389,7 @@ trait MongoDao[T] extends DaoHelper {
    * @param reader - The BSONDocumentReader on the companion object for T
    * @param daoData - DaoSpecific data that must be passed along. Defined on the companion object for T
    * @param tag - the scala type tag for the attribute
-   * @return - Future[Option[T]]
+   * @return - Future Option[T]
    */
   def findOne(paramMap:Map[String, String])(implicit reader: BSONDocumentReader[T], daoData:DaoData[T], tag : TypeTag[T] ): Future[Option[T]] = {
     Logger.debug(s"Finding one: [collection=$collectionName, paramMap=$paramMap]")
@@ -400,9 +398,10 @@ trait MongoDao[T] extends DaoHelper {
 
   /**
    * Find and return one T or None from mongo
-   * @param query - BSONDocument containing the query information
+    *
+    * @param query - BSONDocument containing the query information
    * @param reader - The BSONDocumentReader on the companion object for T
-   * @return - Future[Option[T]]
+   * @return - Future Option[T]
    */
   def findOne(query: BSONDocument = BSONDocument.empty)(implicit reader: BSONDocumentReader[T]): Future[Option[T]] = {
     val queryString = BSONDocument.pretty(query)
@@ -416,7 +415,7 @@ trait MongoDao[T] extends DaoHelper {
    * @param id - The String id of the document
    * @param document - The T containing the data for the document
    * @param writer - The BSONDocumentWriter on the companion object for T
-   * @return - Future[Try[Int]]
+   * @return - Future Try[Int]
    */
   def update(id: Option[String], document: T)(implicit writer: BSONDocumentWriter[T]): Future[Try[Int]] = {
     Logger.debug(s"Updating document: [collection=$collectionName, id=$id, document=$document]")
@@ -429,7 +428,7 @@ trait MongoDao[T] extends DaoHelper {
    * @param id - The BSONObjectID of the document
    * @param document - The T containing the data for the document
    * @param writer - The BSONDocumentWriter on the companion object for T
-   * @return - Future[Try[Int]]
+   * @return - Future Try[Int]
    */
   def update(id: BSONObjectID, document: T)(implicit writer: BSONDocumentWriter[T]): Future[Try[Int]] = {
     Logger.debug(s"Updating document: [collection=$collectionName, id=$id, document=$document]")
@@ -440,7 +439,7 @@ trait MongoDao[T] extends DaoHelper {
    *
    * @param id
    * @param query
-   * @return - Future[Try[Int]]
+   * @return - Future Try[Int]
    */
   def update(id: Option[String], query: BSONDocument): Future[Try[Int]] = {
     Logger.debug(s"Updating by query: [collection=$collectionName, id=$id, query=$query]")
@@ -455,7 +454,7 @@ trait MongoDao[T] extends DaoHelper {
    * @param data - field data
    * @param writer - The BSONDocumentWriter on the companion object for T
    * @tparam S
-   * @return - Future[Try[Int]]
+   * @return - Future Try[Int]
    */
   def push[S](id: Option[String], field: String, data: S)(implicit writer: BSONDocumentWriter[S]): Future[Try[Int]] = {
     Logger.debug(s"Pushing to document: [collection=$collectionName, id=$id, field=$field data=$data]")
@@ -470,7 +469,7 @@ trait MongoDao[T] extends DaoHelper {
    * @param data - field data
    * @param writer - The BSONDocumentWriter on the companion object for T
    * @tparam S
-   * @return - Future[Try[Int]]
+   * @return - Future Try[Int]
    */
   def pull[S](id: Option[String], field: String, data: S)(implicit writer: BSONDocumentWriter[S]): Future[Try[Int]] = {
     Logger.debug(s"Pulling from document: [collection=$collectionName, id=$id, field=$field query=$data]")
@@ -496,13 +495,13 @@ trait MongoDao[T] extends DaoHelper {
    * @param params - parameters to match documents
    * @param daoData - DaoSpecific data that must be passed along. Defined on the companion object for T
    * @param tag - the scala type tag for the attribute
-   * @return - Future[Try[Int]]
+   * @return - Future Try[Int]
    */
   def remove(filter: Option[String], params: Map[String, String])(implicit daoData:DaoData[T], tag : TypeTag[T] ): Future[Try[Int]] = {
     val queryDoc = buildQueryDocument(filter, params, daoData)
     if (queryDoc.isEmpty)
       Future {
-        Failure(new IllegalArgumentException(Messages("noArgumentsProvided")))
+        Failure(new IllegalArgumentException(messagesApi("noArgumentsProvided")))
       }
     else
       remove(queryDoc)
@@ -512,7 +511,7 @@ trait MongoDao[T] extends DaoHelper {
    * Removes a document from mongo by its String id
    *
    * @param id - String id
-   * @return - Future[Try[Int]]
+   * @return - Future Try[Int]
    */
   def remove(id: Option[String]): Future[Try[Int]] = remove(DBQueryBuilder.id(id))
 
@@ -520,7 +519,7 @@ trait MongoDao[T] extends DaoHelper {
    * Removes a document from mongo by its BSONObjectID
    *
    * @param id - String id
-   * @return - Future[Try[Int]]
+   * @return - Future Try[Int]
    */
   def remove(id: BSONObjectID): Future[Try[Int]] = {
     Logger.debug(s"Removing document: [collection=$collectionName, id=$id]")
@@ -532,7 +531,7 @@ trait MongoDao[T] extends DaoHelper {
    *
    * @param query - A BSONDocument containg the query to match against.
    * @param firstMatchOnly - boolean to delete just the first match or all matches
-   * @return - Future[Try[Int]]
+   * @return - Future Try[Int]
    */
   def remove(query: BSONDocument, firstMatchOnly: Boolean = false): Future[Try[Int]] = {
     Logger.debug(s"Removing document(s): [collection=$collectionName, firstMatchOnly=$firstMatchOnly, query=${BSONDocument.pretty(query)}]")
@@ -542,7 +541,7 @@ trait MongoDao[T] extends DaoHelper {
   /**
    * Removes all the documents in a collection
    *
-   * @return - Future[Try[Int]]
+   * @return - Future Try[Int]
    */
   def removeAll(): Future[Try[Int]] = remove(BSONDocument())
 

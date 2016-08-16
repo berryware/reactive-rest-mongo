@@ -1,31 +1,43 @@
 package controllers
 
-import org.joda.time.DateTime
-import play.api.GlobalSettings
-
-import play.api.libs.json.Json
-import play.api.test._
-import reactivemongo.bson.BSONObjectID
+import com.github.simplyscala.{MongoEmbedDatabase, MongodProps}
+import de.flapdoodle.embed.mongo.distribution.Version
 import models.User
-import com.github.athieriot.EmbedConnection
+import org.joda.time.DateTime
+import org.scalatest.{ParallelTestExecution, BeforeAndAfterAll}
+import org.scalatestplus.play._
+import play.api.libs.json.Json
+import play.api.test.Helpers._
+import reactivemongo.bson.BSONObjectID
+import scaldi.Injectable
+import scaldi.play.ScaldiApplicationBuilder
 
+import scala.concurrent.Await
+import scala.concurrent.duration.Duration
 
 /**
  * Add your spec here.
  * You can mock out a whole application including requests, plugins etc.
  * For more information, consult the wiki.
  */
-class UsersSpec extends PlaySpecification with EmbedConnection {
-  sequential
+class UsersSpec extends PlaySpec with Injectable with OneServerPerSuite with BeforeAndAfterAll with MongoEmbedDatabase {
 
-  "User APIs" should {
+  implicit override lazy val app = new ScaldiApplicationBuilder()
+    .configure(("mongodb.uri", "mongodb://localhost:12345/test"))
+    .build()
 
-    def fakeApplicationWithGlobal = FakeApplication(
-      additionalConfiguration = Map("mongodb.uri" -> "mongodb://localhost:12345/test"),
-      withGlobal = Some(new GlobalSettings(){})
-    )
+  var mongoProps: MongodProps = null
 
-    def bsonObjectId = BSONObjectID.generate.stringify
+  override def beforeAll {
+    mongoProps = mongoStart(12345, Version.V2_7_1) // by default port = 12345 & version = Version.2.3.0
+                                                   // add your own port & version parameters in mongoStart method if you need it
+  }
+
+  override def afterAll { mongoStop(mongoProps) }
+
+  "User APIs" must {
+
+     def bsonObjectId = BSONObjectID.generate.stringify
 
     def makeUser = User(
       Some(bsonObjectId),
@@ -51,440 +63,483 @@ class UsersSpec extends PlaySpecification with EmbedConnection {
       Some(DateTime.now)
     )
 
-    "not find a user that has not been created" in new WithApplication(fakeApplicationWithGlobal) {
-      val user = route(FakeRequest(GET, "/users/" + bsonObjectId)).get
-
-      status(user) must equalTo(NOT_FOUND)
-      contentType(user) must beNone
-      contentAsBytes(user).length must equalTo(0)
+    "not find a user that has not been created" in {
+      val response = Await.result(wsUrl("/users/"+bsonObjectId).get, Duration.Inf)
+      response.status mustBe NOT_FOUND
+      response.header(CONTENT_TYPE) mustBe None
+      response.bodyAsBytes.length mustBe 0
     }
 
-    "not delete a user that does not exist" in new WithApplication(fakeApplicationWithGlobal) {
-      val user = route(FakeRequest(DELETE, "/users/" + bsonObjectId)).get
-
-      status(user) must equalTo(NOT_FOUND)
-      contentType(user) must beNone
-      contentAsBytes(user).length must equalTo(0)
+    "not delete a user that does not exist" in {
+      val response = Await.result(wsUrl("/users/"+bsonObjectId).delete, Duration.Inf)
+      response.status mustBe NOT_FOUND
+      response.header(CONTENT_TYPE) mustBe None
+      response.bodyAsBytes.length mustBe 0
     }
 
-    "not update a user that does not exist" in new WithApplication(fakeApplicationWithGlobal) {
-      val user = route(FakeRequest(PUT, "/users").withJsonBody(Json.toJson(makeUser))).get
-
-      status(user) must equalTo(NOT_FOUND)
-      contentType(user) must beNone
-      contentAsBytes(user).length must equalTo(0)
+    "not update a user that does not exist" in {
+      val response = Await.result(wsUrl("/users").put(Json.toJson(makeUser)), Duration.Inf)
+      response.status mustBe NOT_FOUND
+      response.header(CONTENT_TYPE) mustBe None
+      response.bodyAsBytes.length mustBe 0
     }
 
-    "create and delete a user that does not exist" in new WithApplication(fakeApplicationWithGlobal) {
+    "create user that does not exist and then delete the user" in {
       val fakeUser = makeUser
 
-      val createuser = route(FakeRequest(POST, "/users").withJsonBody(Json.toJson(fakeUser))).get
-      status(createuser) must equalTo(CREATED)
-      contentType(createuser) must beNone
-      contentAsBytes(createuser).length must equalTo(0)
+      val createuser = Await.result(wsUrl("/users").post(Json.toJson(fakeUser)), Duration.Inf)
+      createuser.status mustBe CREATED
+      createuser.header(CONTENT_TYPE) mustBe None
+      createuser.bodyAsBytes.length mustBe 0
 
-      val deleteuser = route(FakeRequest(DELETE, "/users/" + fakeUser.id.get)).get
-      status(deleteuser) must equalTo(OK)
-      contentType(deleteuser) must beNone
-      contentAsBytes(deleteuser).length must equalTo(0)
-    }
-
-    "not create a user that already exists" in new WithApplication(fakeApplicationWithGlobal) {
-      val fakeUser = makeUser
-
-      val createuser = route(FakeRequest(POST, "/users").withJsonBody(Json.toJson(fakeUser))).get
-      status(createuser) must equalTo(CREATED)
-      contentType(createuser) must beNone
-      contentAsBytes(createuser).length must equalTo(0)
-
-      val user = route(FakeRequest(POST, "/users").withJsonBody(Json.toJson(fakeUser))).get
-      status(user) must equalTo(BAD_REQUEST)
-      contentType(user) must beSome("text/plain")
-
-      val deleteuser = route(FakeRequest(DELETE, "/users/" + fakeUser.id.get)).get
-      status(deleteuser) must equalTo(OK)
-      contentType(deleteuser) must beNone
-      contentAsBytes(deleteuser).length must equalTo(0)
-    }
-
-    "get a user that already exists" in new WithApplication(fakeApplicationWithGlobal) {
-      val fakeUser = makeUser
-
-      val createuser = route(FakeRequest(POST, "/users").withJsonBody(Json.toJson(fakeUser))).get
-      status(createuser) must equalTo(CREATED)
-      contentType(createuser) must beNone
-      contentAsBytes(createuser).length must equalTo(0)
-
-      val getuser = route(FakeRequest(GET, "/users/" + fakeUser.id.get)).get
-      status(getuser) must equalTo(OK)
-      contentType(getuser) must beSome.which(_ == "application/json")
-      contentAsString(getuser) must contain("\"fullName\":\"Fake User 1\"")
-
-      val deleteuser = route(FakeRequest(DELETE, "/users/" + fakeUser.id.get)).get
-      status(deleteuser) must equalTo(OK)
-      contentType(deleteuser) must beNone
-      contentAsBytes(deleteuser).length must equalTo(0)
-    }
-
-    "update a user that already exists" in new WithApplication(fakeApplicationWithGlobal) {
-      val fakeUser = makeUser
-      val fakeUser2 = makeUser2(fakeUser.id.get)
-
-      val createuser = route(FakeRequest(POST, "/users").withJsonBody(Json.toJson(fakeUser))).get
-      status(createuser) must equalTo(CREATED)
-      contentType(createuser) must beNone
-      contentAsBytes(createuser).length must equalTo(0)
-
-      val updateuser = route(FakeRequest(PUT, "/users").withJsonBody(Json.toJson(fakeUser2))).get
-      status(updateuser) must equalTo(ACCEPTED)
-      contentType(updateuser) must beNone
-      contentAsBytes(updateuser).length must equalTo(0)
-
-      val deleteuser = route(FakeRequest(DELETE, "/users/" + fakeUser2.id.get)).get
-      status(deleteuser) must equalTo(OK)
-      contentType(deleteuser) must beNone
-      contentAsBytes(deleteuser).length must equalTo(0)
-    }
-
-    "A list of users be queryable by an integer attribute of a user" in new WithApplication(fakeApplicationWithGlobal) {
-      val fakeUser = makeUser
-
-      val createuser = route(FakeRequest(POST, "/users").withJsonBody(Json.toJson(fakeUser))).get
-      status(createuser) must equalTo(CREATED)
-      contentType(createuser) must beNone
-      contentAsBytes(createuser).length must equalTo(0)
-
-      val users = route(FakeRequest(GET, "/users?age=18")).get
-      status(users) must equalTo(OK)
-      contentType(users) must beSome.which(_ == "application/json")
-      contentAsString(users) must contain("\"fullName\":\"Fake User 1\"")
-
-      val deleteuser = route(FakeRequest(DELETE, "/users/" + fakeUser.id.get)).get
-      status(deleteuser) must equalTo(OK)
-      contentType(deleteuser) must beNone
-      contentAsBytes(deleteuser).length must equalTo(0)
+      val deleteuser = Await.result(wsUrl("/users/"+fakeUser.id.get).delete, Duration.Inf)
+      deleteuser.header(CONTENT_TYPE) mustBe None
+      deleteuser.bodyAsBytes.length mustBe 0
 
     }
 
-    "A list of users be queryable by a DateTime attribute of a user" in new WithApplication(fakeApplicationWithGlobal) {
+    "not create a user that already exists" in {
       val fakeUser = makeUser
 
-      val createuser = route(FakeRequest(POST, "/users").withJsonBody(Json.toJson(fakeUser))).get
-      status(createuser) must equalTo(CREATED)
-      contentType(createuser) must beNone
-      contentAsBytes(createuser).length must equalTo(0)
+      val createuser = Await.result(wsUrl("/users").post(Json.toJson(fakeUser)), Duration.Inf)
+      createuser.status mustBe CREATED
+      createuser.header(CONTENT_TYPE) mustBe None
+      createuser.bodyAsBytes.length mustBe 0
 
-      val users = route(FakeRequest(GET, "/users?created=" + fakeUser.created.get.getMillis)).get
-      status(users) must equalTo(OK)
-      contentType(users) must beSome.which(_ == "application/json")
-      contentAsString(users) must contain("\"fullName\":\"Fake User 1\"")
 
-      val deleteuser = route(FakeRequest(DELETE, "/users/" + fakeUser.id.get)).get
-      status(deleteuser) must equalTo(OK)
-      contentType(deleteuser) must beNone
-      contentAsBytes(deleteuser).length must equalTo(0)
+      val user = Await.result(wsUrl("/users").post(Json.toJson(fakeUser)), Duration.Inf)
+      user.status mustBe BAD_REQUEST
+      user.header(CONTENT_TYPE) mustBe defined
+      user.header(CONTENT_TYPE) mustBe Some("text/plain; charset=utf-8")
+
+      val deleteuser = Await.result(wsUrl("/users/"+fakeUser.id.get).delete, Duration.Inf)
+      deleteuser.header(CONTENT_TYPE) mustBe None
+      deleteuser.bodyAsBytes.length mustBe 0
+
+     }
+
+    "get a user that already exists" in {
+      val fakeUser = makeUser
+
+      val createuser = Await.result(wsUrl("/users").post(Json.toJson(fakeUser)), Duration.Inf)
+      createuser.status mustBe CREATED
+      createuser.header(CONTENT_TYPE) mustBe None
+      createuser.bodyAsBytes.length mustBe 0
+
+      val getuser = Await.result(wsUrl("/users/"+fakeUser.id.get).get, Duration.Inf)
+      getuser.status mustBe OK
+      getuser.header(CONTENT_TYPE) mustBe defined
+      getuser.header(CONTENT_TYPE) mustBe Some("application/json")
+      getuser.body must include ("\"fullName\":\"Fake User 1\"")
+
+      val deleteuser = Await.result(wsUrl("/users/"+fakeUser.id.get).delete, Duration.Inf)
+      deleteuser.header(CONTENT_TYPE) mustBe None
+      deleteuser.bodyAsBytes.length mustBe 0
+
+     }
+
+    "get a user that already exists by alternate attributes" in {
+      val fakeUser = makeUser
+
+      val createuser = Await.result(wsUrl("/users").post(Json.toJson(fakeUser)), Duration.Inf)
+      createuser.status mustBe CREATED
+      createuser.header(CONTENT_TYPE) mustBe None
+      createuser.bodyAsBytes.length mustBe 0
+
+      val getuser = Await.result(wsUrl("/users/alt").withQueryString(("firstName",fakeUser.firstName),("lastName",fakeUser.lastName)).get, Duration.Inf)
+      getuser.status mustBe OK
+      getuser.header(CONTENT_TYPE) mustBe defined
+      getuser.header(CONTENT_TYPE) mustBe Some("application/json")
+      getuser.body must include ("\"fullName\":\"Fake User 1\"")
+
+      val deleteuser = Await.result(wsUrl("/users/"+fakeUser.id.get).delete, Duration.Inf)
+      deleteuser.header(CONTENT_TYPE) mustBe None
+      deleteuser.bodyAsBytes.length mustBe 0
+
     }
 
-    "A list of users should not be found with one good match and one bad match " in new WithApplication(fakeApplicationWithGlobal) {
+    "update a user that already exists" in {
+      val fakeUser1 = makeUser
+      val fakeUser2 = makeUser2(fakeUser1.id.get)
+
+      val createuser = Await.result(wsUrl("/users").post(Json.toJson(fakeUser1)), Duration.Inf)
+      createuser.status mustBe CREATED
+      createuser.header(CONTENT_TYPE) mustBe None
+      createuser.bodyAsBytes.length mustBe 0
+
+      val updateuser = Await.result(wsUrl("/users").put(Json.toJson(fakeUser2)), Duration.Inf)
+      updateuser.status mustBe ACCEPTED
+      updateuser.header(CONTENT_TYPE) mustBe None
+      updateuser.bodyAsBytes.length mustBe 0
+
+      val deleteuser = Await.result(wsUrl("/users/"+fakeUser2.id.get).delete, Duration.Inf)
+      deleteuser.status mustBe OK
+      deleteuser.header(CONTENT_TYPE) mustBe None
+      deleteuser.bodyAsBytes.length mustBe 0
+     }
+
+    "return a list of users queryable by an integer attribute" in {
       val fakeUser = makeUser
 
-      val createuser = route(FakeRequest(POST, "/users").withJsonBody(Json.toJson(fakeUser))).get
-      status(createuser) must equalTo(CREATED)
-      contentType(createuser) must beNone
-      contentAsBytes(createuser).length must equalTo(0)
+      val createuser = Await.result(wsUrl("/users").post(Json.toJson(fakeUser)), Duration.Inf)
+      createuser.status mustBe CREATED
+      createuser.header(CONTENT_TYPE) mustBe None
+      createuser.bodyAsBytes.length mustBe 0
 
-      val users = route(FakeRequest(GET, "/users?age=17&created=" + fakeUser.created.get.getMillis)).get
-      status(users) must equalTo(OK)
-      contentType(users) must beSome.which(_ == "application/json")
-      contentAsString(users) must not contain ("\"fullName\":\"Fake User 1\"")
+      val users = Await.result(wsUrl("/users").withQueryString(("age","18")).get, Duration.Inf)
+      users.status mustBe OK
+      users.header(CONTENT_TYPE) mustBe defined
+      users.header(CONTENT_TYPE) mustBe Some("application/json")
+      users.body must include ("\"fullName\":\"Fake User 1\"")
 
-      val deleteuser = route(FakeRequest(DELETE, "/users/" + fakeUser.id.get)).get
-      status(deleteuser) must equalTo(OK)
-      contentType(deleteuser) must beNone
-      contentAsBytes(deleteuser).length must equalTo(0)
+      val deleteuser = Await.result(wsUrl("/users/"+fakeUser.id.get).delete, Duration.Inf)
+      deleteuser.header(CONTENT_TYPE) mustBe None
+      deleteuser.bodyAsBytes.length mustBe 0
+
     }
 
-    "A list of users be queryable by an Int and a DateTime attribute of a user" in new WithApplication(fakeApplicationWithGlobal) {
+    "return a list of users queryable by a DateTime attribute" in {
       val fakeUser = makeUser
 
-      val createuser = route(FakeRequest(POST, "/users").withJsonBody(Json.toJson(fakeUser))).get
-      status(createuser) must equalTo(CREATED)
-      contentType(createuser) must beNone
-      contentAsBytes(createuser).length must equalTo(0)
+      val createuser = Await.result(wsUrl("/users").post(Json.toJson(fakeUser)), Duration.Inf)
+      createuser.status mustBe CREATED
+      createuser.header(CONTENT_TYPE) mustBe None
+      createuser.bodyAsBytes.length mustBe 0
 
-      val users = route(FakeRequest(GET, "/users?age=18&created=" + fakeUser.created.get.getMillis)).get
-      status(users) must equalTo(OK)
-      contentType(users) must beSome.which(_ == "application/json")
-      contentAsString(users) must contain("\"fullName\":\"Fake User 1\"")
+      val users = Await.result(wsUrl("/users").withQueryString(("created",fakeUser.created.get.getMillis.toString)).get, Duration.Inf)
+      users.status mustBe OK
+      users.header(CONTENT_TYPE) mustBe defined
+      users.header(CONTENT_TYPE) mustBe Some("application/json")
+      users.body must include ("\"fullName\":\"Fake User 1\"")
 
-      val deleteuser = route(FakeRequest(DELETE, "/users/" + fakeUser.id.get)).get
-      status(deleteuser) must equalTo(OK)
-      contentType(deleteuser) must beNone
-      contentAsBytes(deleteuser).length must equalTo(0)
+      val deleteuser = Await.result(wsUrl("/users/"+fakeUser.id.get).delete, Duration.Inf)
+      deleteuser.header(CONTENT_TYPE) mustBe None
+      deleteuser.bodyAsBytes.length mustBe 0
+
+     }
+
+    "not return a list of users queried with one good match and one bad match " in {
+      val fakeUser = makeUser
+
+      val createuser = Await.result(wsUrl("/users").post(Json.toJson(fakeUser)), Duration.Inf)
+      createuser.status mustBe CREATED
+      createuser.header(CONTENT_TYPE) mustBe None
+      createuser.bodyAsBytes.length mustBe 0
+
+      val users = Await.result(wsUrl("/users").withQueryString(("age","17"),("created",fakeUser.created.get.getMillis.toString)).get, Duration.Inf)
+      users.status mustBe OK
+      users.header(CONTENT_TYPE) mustBe defined
+      users.header(CONTENT_TYPE) mustBe Some("application/json")
+      users.body must not include ("\"fullName\":\"Fake User 1\"")
+
+      val deleteuser = Await.result(wsUrl("/users/"+fakeUser.id.get).delete, Duration.Inf)
+      deleteuser.header(CONTENT_TYPE) mustBe None
+      deleteuser.bodyAsBytes.length mustBe 0
+
     }
 
-    "A user should be queryable by a complete range of Ints" in new WithApplication(fakeApplicationWithGlobal) {
+    "return a list of users queryable by an Int and a DateTime attribute" in {
       val fakeUser = makeUser
 
-      val createuser = route(FakeRequest(POST, "/users").withJsonBody(Json.toJson(fakeUser))).get
-      status(createuser) must equalTo(CREATED)
-      contentType(createuser) must beNone
-      contentAsBytes(createuser).length must equalTo(0)
+      val createuser = Await.result(wsUrl("/users").post(Json.toJson(fakeUser)), Duration.Inf)
+      createuser.status mustBe CREATED
+      createuser.header(CONTENT_TYPE) mustBe None
+      createuser.bodyAsBytes.length mustBe 0
+
+      val users = Await.result(wsUrl("/users").withQueryString(("age","18"),("created",fakeUser.created.get.getMillis.toString)).get, Duration.Inf)
+      users.status mustBe OK
+      users.header(CONTENT_TYPE) mustBe defined
+      users.header(CONTENT_TYPE) mustBe Some("application/json")
+      users.body must include ("\"fullName\":\"Fake User 1\"")
+
+      val deleteuser = Await.result(wsUrl("/users/"+fakeUser.id.get).delete, Duration.Inf)
+      deleteuser.header(CONTENT_TYPE) mustBe None
+      deleteuser.bodyAsBytes.length mustBe 0
+
+    }
+
+    "return a user queryable by a complete range of Ints" in {
+      val fakeUser = makeUser
+
+      val createuser = Await.result(wsUrl("/users").post(Json.toJson(fakeUser)), Duration.Inf)
+      createuser.status mustBe CREATED
+      createuser.header(CONTENT_TYPE) mustBe None
+      createuser.bodyAsBytes.length mustBe 0
 
       // test full range
-      val users1 = route(FakeRequest(GET, "/users?age=(17,19)")).get
-      status(users1) must equalTo(OK)
-      contentType(users1) must beSome.which(_ == "application/json")
-      contentAsString(users1) must contain("\"age\":18")
+      val users = Await.result(wsUrl("/users").withQueryString(("age","(17,19)")).get, Duration.Inf)
+      users.status mustBe OK
+      users.header(CONTENT_TYPE) mustBe defined
+      users.header(CONTENT_TYPE) mustBe Some("application/json")
+      users.body must include ("\"age\":18")
 
-      val deleteuser = route(FakeRequest(DELETE, "/users/" + fakeUser.id.get)).get
-      status(deleteuser) must equalTo(OK)
-      contentType(deleteuser) must beNone
-      contentAsBytes(deleteuser).length must equalTo(0)
-    }
+      val deleteuser = Await.result(wsUrl("/users/"+fakeUser.id.get).delete, Duration.Inf)
+      deleteuser.header(CONTENT_TYPE) mustBe None
+      deleteuser.bodyAsBytes.length mustBe 0
 
-    "A user should be queryable by a right-end open partial range of Ints" in new WithApplication(fakeApplicationWithGlobal) {
+     }
+
+    "return a user queryable by a right-end open partial range of Ints" in {
       val fakeUser = makeUser
 
-      val createuser = route(FakeRequest(POST, "/users").withJsonBody(Json.toJson(fakeUser))).get
-      status(createuser) must equalTo(CREATED)
-      contentType(createuser) must beNone
-      contentAsBytes(createuser).length must equalTo(0)
+      val createuser = Await.result(wsUrl("/users").post(Json.toJson(fakeUser)), Duration.Inf)
+      createuser.status mustBe CREATED
+      createuser.header(CONTENT_TYPE) mustBe None
+      createuser.bodyAsBytes.length mustBe 0
 
-      // test partial range - enable once embedded mongo is in place
-      val users2 = route(FakeRequest(GET, "/users?age=(17,)")).get
-      status(users2) must equalTo(OK)
-      contentType(users2) must beSome.which(_ == "application/json")
-      contentAsString(users2) must contain("\"age\":18")
+     // test partial range - enable once embedded mongo is in place
+     val users = Await.result(wsUrl("/users").withQueryString(("age","(17,)")).get, Duration.Inf)
+      users.status mustBe OK
+      users.header(CONTENT_TYPE) mustBe defined
+      users.header(CONTENT_TYPE) mustBe Some("application/json")
+      users.body must include ("\"age\":18")
 
-      val deleteuser = route(FakeRequest(DELETE, "/users/" + fakeUser.id.get)).get
-      status(deleteuser) must equalTo(OK)
-      contentType(deleteuser) must beNone
-      contentAsBytes(deleteuser).length must equalTo(0)
+      val deleteuser = Await.result(wsUrl("/users/"+fakeUser.id.get).delete, Duration.Inf)
+      deleteuser.header(CONTENT_TYPE) mustBe None
+      deleteuser.bodyAsBytes.length mustBe 0
+
     }
 
-    "A user should be queryable by a left-end open partial range of Ints" in new WithApplication(fakeApplicationWithGlobal) {
+    "return a user queryable by a left-end open partial range of Ints" in {
       val fakeUser = makeUser
 
-      val createuser = route(FakeRequest(POST, "/users").withJsonBody(Json.toJson(fakeUser))).get
-      status(createuser) must equalTo(CREATED)
-      contentType(createuser) must beNone
-      contentAsBytes(createuser).length must equalTo(0)
+      val createuser = Await.result(wsUrl("/users").post(Json.toJson(fakeUser)), Duration.Inf)
+      createuser.status mustBe CREATED
+      createuser.header(CONTENT_TYPE) mustBe None
+      createuser.bodyAsBytes.length mustBe 0
 
       // test partial range
-      val users3 = route(FakeRequest(GET, "/users?age=(,19)")).get
-      status(users3) must equalTo(OK)
-      contentType(users3) must beSome.which(_ == "application/json")
-      contentAsString(users3) must contain("\"age\":18")
+      val users = Await.result(wsUrl("/users").withQueryString(("age","(,19)")).get, Duration.Inf)
+      users.status mustBe OK
+      users.header(CONTENT_TYPE) mustBe defined
+      users.header(CONTENT_TYPE) mustBe Some("application/json")
+      users.body must include ("\"age\":18")
 
-      val deleteuser = route(FakeRequest(DELETE, "/users/" + fakeUser.id.get)).get
-      status(deleteuser) must equalTo(OK)
-      contentType(deleteuser) must beNone
-      contentAsBytes(deleteuser).length must equalTo(0)
+      val deleteuser = Await.result(wsUrl("/users/"+fakeUser.id.get).delete, Duration.Inf)
+      deleteuser.header(CONTENT_TYPE) mustBe None
+      deleteuser.bodyAsBytes.length mustBe 0
+
     }
 
-    "A user should be queryable by a right-end open partial inclusive range of Ints" in new WithApplication(fakeApplicationWithGlobal) {
+    "return a user queryable by a right-end open partial inclusive range of Ints" in {
       val fakeUser = makeUser
 
-      val createuser = route(FakeRequest(POST, "/users").withJsonBody(Json.toJson(fakeUser))).get
-      status(createuser) must equalTo(CREATED)
-      contentType(createuser) must beNone
-      contentAsBytes(createuser).length must equalTo(0)
+      val createuser = Await.result(wsUrl("/users").post(Json.toJson(fakeUser)), Duration.Inf)
+      createuser.status mustBe CREATED
+      createuser.header(CONTENT_TYPE) mustBe None
+      createuser.bodyAsBytes.length mustBe 0
 
       // test partial range - enable once embedded mongo is in place
-      val users4 = route(FakeRequest(GET, "/users?age=(18,)")).get
-      status(users4) must equalTo(OK)
-      contentType(users4) must beSome.which(_ == "application/json")
-      contentAsString(users4) must contain("\"age\":18")
+      val users = Await.result(wsUrl("/users").withQueryString(("age","(18,)")).get, Duration.Inf)
+      users.status mustBe OK
+      users.header(CONTENT_TYPE) mustBe defined
+      users.header(CONTENT_TYPE) mustBe Some("application/json")
+      users.body must include ("\"age\":18")
 
-      val deleteuser = route(FakeRequest(DELETE, "/users/" + fakeUser.id.get)).get
-      status(deleteuser) must equalTo(OK)
-      contentType(deleteuser) must beNone
-      contentAsBytes(deleteuser).length must equalTo(0)
+      val deleteuser = Await.result(wsUrl("/users/"+fakeUser.id.get).delete, Duration.Inf)
+      deleteuser.header(CONTENT_TYPE) mustBe None
+      deleteuser.bodyAsBytes.length mustBe 0
+
     }
 
-    "A user should be queryable by a left-end open partial inclusive range of Ints" in new WithApplication(fakeApplicationWithGlobal) {
+    "return a user queryable by a left-end open partial inclusive range of Ints" in {
       val fakeUser = makeUser
 
-      val createuser = route(FakeRequest(POST, "/users").withJsonBody(Json.toJson(fakeUser))).get
-      status(createuser) must equalTo(CREATED)
-      contentType(createuser) must beNone
-      contentAsBytes(createuser).length must equalTo(0)
+      val createuser = Await.result(wsUrl("/users").post(Json.toJson(fakeUser)), Duration.Inf)
+      createuser.status mustBe CREATED
+      createuser.header(CONTENT_TYPE) mustBe None
+      createuser.bodyAsBytes.length mustBe 0
 
       // test partial range
-      val users5 = route(FakeRequest(GET, "/users?age=(,18)")).get
-      status(users5) must equalTo(OK)
-      contentType(users5) must beSome.which(_ == "application/json")
-      contentAsString(users5) must contain("\"age\":18")
+      val users = Await.result(wsUrl("/users").withQueryString(("age","(,18)")).get, Duration.Inf)
+      users.status mustBe OK
+      users.header(CONTENT_TYPE) mustBe defined
+      users.header(CONTENT_TYPE) mustBe Some("application/json")
+      users.body must include ("\"age\":18")
 
-      val deleteuser = route(FakeRequest(DELETE, "/users/" + fakeUser.id.get)).get
-      status(deleteuser) must equalTo(OK)
-      contentType(deleteuser) must beNone
-      contentAsBytes(deleteuser).length must equalTo(0)
+      val deleteuser = Await.result(wsUrl("/users/"+fakeUser.id.get).delete, Duration.Inf)
+      deleteuser.header(CONTENT_TYPE) mustBe None
+      deleteuser.bodyAsBytes.length mustBe 0
+
     }
 
-    "A user should be queryable by a right-end open partial exclusive range of Ints" in new WithApplication(fakeApplicationWithGlobal) {
+    "return a user queryable by a right-end open partial exclusive range of Ints" in {
       val fakeUser = makeUser
 
-      val createuser = route(FakeRequest(POST, "/users").withJsonBody(Json.toJson(fakeUser))).get
-      status(createuser) must equalTo(CREATED)
-      contentType(createuser) must beNone
-      contentAsBytes(createuser).length must equalTo(0)
+      val createuser = Await.result(wsUrl("/users").post(Json.toJson(fakeUser)), Duration.Inf)
+      createuser.status mustBe CREATED
+      createuser.header(CONTENT_TYPE) mustBe None
+      createuser.bodyAsBytes.length mustBe 0
 
       // test partial range - enable once embedded mongo is in place
-      val users6 = route(FakeRequest(GET, "/users?age=(19,)")).get
-      status(users6) must equalTo(OK)
-      contentType(users6) must beSome.which(_ == "application/json")
-      contentAsString(users6) must not contain("\"age\":18")
+      val users = Await.result(wsUrl("/users").withQueryString(("age","(19,)")).get, Duration.Inf)
+      users.status mustBe OK
+      users.header(CONTENT_TYPE) mustBe defined
+      users.header(CONTENT_TYPE) mustBe Some("application/json")
+      users.body must not include ("\"age\":18")
 
-      val deleteuser = route(FakeRequest(DELETE, "/users/" + fakeUser.id.get)).get
-      status(deleteuser) must equalTo(OK)
-      contentType(deleteuser) must beNone
-      contentAsBytes(deleteuser).length must equalTo(0)
+      val deleteuser = Await.result(wsUrl("/users/"+fakeUser.id.get).delete, Duration.Inf)
+      deleteuser.header(CONTENT_TYPE) mustBe None
+      deleteuser.bodyAsBytes.length mustBe 0
+
     }
 
-    "A user should not be queryable by a left-end open partial exclusive range of Ints" in new WithApplication(fakeApplicationWithGlobal) {
+    "return a user queryable by a left-end open partial exclusive range of Ints" in {
       val fakeUser = makeUser
 
-      val createuser = route(FakeRequest(POST, "/users").withJsonBody(Json.toJson(fakeUser))).get
-      status(createuser) must equalTo(CREATED)
-      contentType(createuser) must beNone
-      contentAsBytes(createuser).length must equalTo(0)
+      val createuser = Await.result(wsUrl("/users").post(Json.toJson(fakeUser)), Duration.Inf)
+      createuser.status mustBe CREATED
+      createuser.header(CONTENT_TYPE) mustBe None
+      createuser.bodyAsBytes.length mustBe 0
 
       // test partial range
-      val users7 = route(FakeRequest(GET, "/users?age=(,17)")).get
-      status(users7) must equalTo(OK)
-      contentType(users7) must beSome.which(_ == "application/json")
-      contentAsString(users7) must not contain ("\"age\":18")
+      val users = Await.result(wsUrl("/users").withQueryString(("age","(,17)")).get, Duration.Inf)
+      users.status mustBe OK
+      users.header(CONTENT_TYPE) mustBe defined
+      users.header(CONTENT_TYPE) mustBe Some("application/json")
+      users.body must not include ("\"age\":18")
 
-      val deleteuser = route(FakeRequest(DELETE, "/users/" + fakeUser.id.get)).get
-      status(deleteuser) must equalTo(OK)
-      contentType(deleteuser) must beNone
-      contentAsBytes(deleteuser).length must equalTo(0)
-    }
+      val deleteuser = Await.result(wsUrl("/users/"+fakeUser.id.get).delete, Duration.Inf)
+      deleteuser.header(CONTENT_TYPE) mustBe None
+      deleteuser.bodyAsBytes.length mustBe 0
 
-    "A list of users should return the created users" in new WithApplication(fakeApplicationWithGlobal) {
+   }
+
+    "return a list of users when searching text fields" in {
       val fakeUser1 = makeUser
       val fakeUser2 = makeUser2(bsonObjectId)
 
-      route(FakeRequest(POST, "/users").withJsonBody(Json.toJson(fakeUser1))).get
-      route(FakeRequest(POST, "/users").withJsonBody(Json.toJson(fakeUser2))).get
-      val users = route(FakeRequest(GET, "/users?q=Fake")).get
-      status(users) must equalTo(OK)
-      contentType(users) must beSome.which(_ == "application/json")
-      contentAsString(users) must contain("\"fullName\":\"Fake User 1\"")
-      contentAsString(users) must contain("\"fullName\":\"Fake User 2\"")
+      val createuser1 = Await.result(wsUrl("/users").post(Json.toJson(fakeUser1)), Duration.Inf)
+      createuser1.status mustBe CREATED
+      createuser1.header(CONTENT_TYPE) mustBe None
+      createuser1.bodyAsBytes.length mustBe 0
 
-      val deleteuser = route(FakeRequest(DELETE, "/users/" + fakeUser1.id.get)).get
-      status(deleteuser) must equalTo(OK)
-      contentType(deleteuser) must beNone
-      contentAsBytes(deleteuser).length must equalTo(0)
+      val createuser2 = Await.result(wsUrl("/users").post(Json.toJson(fakeUser2)), Duration.Inf)
+      createuser2.status mustBe CREATED
+      createuser2.header(CONTENT_TYPE) mustBe None
+      createuser2.bodyAsBytes.length mustBe 0
 
-      val deleteuser2 = route(FakeRequest(DELETE, "/users/" + fakeUser2.id.get)).get
-      status(deleteuser2) must equalTo(OK)
-      contentType(deleteuser2) must beNone
-      contentAsBytes(deleteuser2).length must equalTo(0)
+      val users = Await.result(wsUrl("/users").withQueryString(("q","Fake")).get, Duration.Inf)
+      users.status mustBe OK
+      users.header(CONTENT_TYPE) mustBe defined
+      users.header(CONTENT_TYPE) mustBe Some("application/json")
+      users.body must include ("\"fullName\":\"Fake User 1\"")
+      users.body must include ("\"fullName\":\"Fake User 2\"")
+
+      val deleteuser1 = Await.result(wsUrl("/users/"+fakeUser1.id.get).delete, Duration.Inf)
+      deleteuser1.status mustBe OK
+      deleteuser1.header(CONTENT_TYPE) mustBe None
+      deleteuser1.bodyAsBytes.length mustBe 0
+
+      val deleteuser2 = Await.result(wsUrl("/users/"+fakeUser2.id.get).delete, Duration.Inf)
+      deleteuser2.status mustBe OK
+      deleteuser2.header(CONTENT_TYPE) mustBe None
+      deleteuser2.bodyAsBytes.length mustBe 0
     }
 
-    "A user should be queryable by an array of Ints" in new WithApplication(fakeApplicationWithGlobal) {
+    "return a user queryable by an array of Ints" in {
       val fakeUser = makeUser
 
-      val createuser = route(FakeRequest(POST, "/users").withJsonBody(Json.toJson(fakeUser))).get
-      status(createuser) must equalTo(CREATED)
-      contentType(createuser) must beNone
-      contentAsBytes(createuser).length must equalTo(0)
+      val createuser = Await.result(wsUrl("/users").post(Json.toJson(fakeUser)), Duration.Inf)
+      createuser.status mustBe CREATED
+      createuser.header(CONTENT_TYPE) mustBe None
+      createuser.bodyAsBytes.length mustBe 0
 
       // test in middle
-      val users1 = route(FakeRequest(GET, "/users?age=[17,18,19]")).get
-      status(users1) must equalTo(OK)
-      contentType(users1) must beSome.which(_ == "application/json")
-      contentAsString(users1) must contain("\"age\":18")
+      val users = Await.result(wsUrl("/users").withQueryString(("age","[17,18,19]")).get, Duration.Inf)
+      users.status mustBe OK
+      users.header(CONTENT_TYPE) mustBe defined
+      users.header(CONTENT_TYPE) mustBe Some("application/json")
+      users.body must include ("\"age\":18")
 
-      val deleteuser = route(FakeRequest(DELETE, "/users/" + fakeUser.id.get)).get
-      status(deleteuser) must equalTo(OK)
-      contentType(deleteuser) must beNone
-      contentAsBytes(deleteuser).length must equalTo(0)
+      val deleteuser = Await.result(wsUrl("/users/"+fakeUser.id.get).delete, Duration.Inf)
+      deleteuser.header(CONTENT_TYPE) mustBe None
+      deleteuser.bodyAsBytes.length mustBe 0
+
     }
 
-    "A user should be queryable by a 1-element array of Ints" in new WithApplication(fakeApplicationWithGlobal) {
+    "return a user queryable by a 1-element array of Ints" in {
       val fakeUser = makeUser
 
-      val createuser = route(FakeRequest(POST, "/users").withJsonBody(Json.toJson(fakeUser))).get
-      status(createuser) must equalTo(CREATED)
-      contentType(createuser) must beNone
-      contentAsBytes(createuser).length must equalTo(0)
+      val createuser = Await.result(wsUrl("/users").post(Json.toJson(fakeUser)), Duration.Inf)
+      createuser.status mustBe CREATED
+      createuser.header(CONTENT_TYPE) mustBe None
+      createuser.bodyAsBytes.length mustBe 0
 
       // test alone
-      val users3 = route(FakeRequest(GET, "/users?age=[18]")).get
-      status(users3) must equalTo(OK)
-      contentType(users3) must beSome.which(_ == "application/json")
-      contentAsString(users3) must contain("\"age\":18")
+      val users = Await.result(wsUrl("/users").withQueryString(("age","[18]")).get, Duration.Inf)
+      users.status mustBe OK
+      users.header(CONTENT_TYPE) mustBe defined
+      users.header(CONTENT_TYPE) mustBe Some("application/json")
+      users.body must include ("\"age\":18")
 
-      val deleteuser = route(FakeRequest(DELETE, "/users/" + fakeUser.id.get)).get
-      status(deleteuser) must equalTo(OK)
-      contentType(deleteuser) must beNone
-      contentAsBytes(deleteuser).length must equalTo(0)
-    }
+      val deleteuser = Await.result(wsUrl("/users/"+fakeUser.id.get).delete, Duration.Inf)
+      deleteuser.header(CONTENT_TYPE) mustBe None
+      deleteuser.bodyAsBytes.length mustBe 0
 
-    "A user should be queryable by an array of Ints with match in last element" in new WithApplication(fakeApplicationWithGlobal) {
+     }
+
+    "return a user queryable by an array of Ints with match in last element" in {
       val fakeUser = makeUser
 
-      val createuser = route(FakeRequest(POST, "/users").withJsonBody(Json.toJson(fakeUser))).get
-      status(createuser) must equalTo(CREATED)
-      contentType(createuser) must beNone
-      contentAsBytes(createuser).length must equalTo(0)
+      val createuser = Await.result(wsUrl("/users").post(Json.toJson(fakeUser)), Duration.Inf)
+      createuser.status mustBe CREATED
+      createuser.header(CONTENT_TYPE) mustBe None
+      createuser.bodyAsBytes.length mustBe 0
 
       // test on end
-      val users4 = route(FakeRequest(GET, "/users?age=[17,18]")).get
-      status(users4) must equalTo(OK)
-      contentType(users4) must beSome.which(_ == "application/json")
-      contentAsString(users4) must contain("\"age\":18")
+      val users = Await.result(wsUrl("/users").withQueryString(("age","[17,18]")).get, Duration.Inf)
+      users.status mustBe OK
+      users.header(CONTENT_TYPE) mustBe defined
+      users.header(CONTENT_TYPE) mustBe Some("application/json")
+      users.body must include ("\"age\":18")
 
-      val deleteuser = route(FakeRequest(DELETE, "/users/" + fakeUser.id.get)).get
-      status(deleteuser) must equalTo(OK)
-      contentType(deleteuser) must beNone
-      contentAsBytes(deleteuser).length must equalTo(0)
+      val deleteuser = Await.result(wsUrl("/users/"+fakeUser.id.get).delete, Duration.Inf)
+      deleteuser.header(CONTENT_TYPE) mustBe None
+      deleteuser.bodyAsBytes.length mustBe 0
+
     }
 
-    "A user should be queryable by an array of Ints with match in first element" in new WithApplication(fakeApplicationWithGlobal) {
+    "return a user queryable by an array of Ints with a match in first element" in {
       val fakeUser = makeUser
 
-      val createuser = route(FakeRequest(POST, "/users").withJsonBody(Json.toJson(fakeUser))).get
-      status(createuser) must equalTo(CREATED)
-      contentType(createuser) must beNone
-      contentAsBytes(createuser).length must equalTo(0)
+      val createuser = Await.result(wsUrl("/users").post(Json.toJson(fakeUser)), Duration.Inf)
+      createuser.status mustBe CREATED
+      createuser.header(CONTENT_TYPE) mustBe None
+      createuser.bodyAsBytes.length mustBe 0
 
       // test on other end
-      val users5 = route(FakeRequest(GET, "/users?age=[18,19]")).get
-      status(users5) must equalTo(OK)
-      contentType(users5) must beSome.which(_ == "application/json")
-      contentAsString(users5) must contain("\"age\":18")
+      val users = Await.result(wsUrl("/users").withQueryString(("age","[18,19]")).get, Duration.Inf)
+      users.status mustBe OK
+      users.header(CONTENT_TYPE) mustBe defined
+      users.header(CONTENT_TYPE) mustBe Some("application/json")
+      users.body must include ("\"age\":18")
 
+      val deleteuser = Await.result(wsUrl("/users/"+fakeUser.id.get).delete, Duration.Inf)
+      deleteuser.header(CONTENT_TYPE) mustBe None
+      deleteuser.bodyAsBytes.length mustBe 0
 
-      val deleteuser = route(FakeRequest(DELETE, "/users/" + fakeUser.id.get)).get
-      status(deleteuser) must equalTo(OK)
-      contentType(deleteuser) must beNone
-      contentAsBytes(deleteuser).length must equalTo(0)
-    }
+     }
 
-    "A user should not be queryable by an array of Ints with no matching element" in new WithApplication(fakeApplicationWithGlobal) {
+    "not return a user  queryable by an array of Ints with no matching element" in {
       val fakeUser = makeUser
 
-      val createuser = route(FakeRequest(POST, "/users").withJsonBody(Json.toJson(fakeUser))).get
-      status(createuser) must equalTo(CREATED)
-      contentType(createuser) must beNone
-      contentAsBytes(createuser).length must equalTo(0)
+      val createuser = Await.result(wsUrl("/users").post(Json.toJson(fakeUser)), Duration.Inf)
+      createuser.status mustBe CREATED
+      createuser.header(CONTENT_TYPE) mustBe None
+      createuser.bodyAsBytes.length mustBe 0
 
       // test not in range
-      val users7 = route(FakeRequest(GET, "/users?age=[17,19,20]")).get
-      status(users7) must equalTo(OK)
-      contentType(users7) must beSome.which(_ == "application/json")
-      contentAsString(users7) must not contain ("\"age\":18")
+      val users = Await.result(wsUrl("/users").withQueryString(("age","[17,19,20]")).get, Duration.Inf)
+      users.status mustBe OK
+      users.header(CONTENT_TYPE) mustBe defined
+      users.header(CONTENT_TYPE) mustBe Some("application/json")
+      users.body must not include ("\"age\":18")
 
-      val deleteuser = route(FakeRequest(DELETE, "/users/" + fakeUser.id.get)).get
-      status(deleteuser) must equalTo(OK)
-      contentType(deleteuser) must beNone
-      contentAsBytes(deleteuser).length must equalTo(0)
+      val deleteuser = Await.result(wsUrl("/users/"+fakeUser.id.get).delete, Duration.Inf)
+      deleteuser.header(CONTENT_TYPE) mustBe None
+      deleteuser.bodyAsBytes.length mustBe 0
+
     }
   }
 }

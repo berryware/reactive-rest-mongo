@@ -22,17 +22,16 @@
 
 package controllers
 
-import play.api.mvc.Action
-
-import scala.util.{Failure, Success}
-import scala.concurrent.{ExecutionContext, Future}
-import play.api.mvc.Controller
-import play.api.libs.json.{Format, Json}
-import reactivemongo.bson.{BSONDocumentReader, BSONDocumentWriter}
-import models.dao.IdentifiableDAO
 import models._
+import models.dao.IdentifiableDAO
 import play.api.Logger
+import play.api.libs.json.{Format, Json}
+import play.api.mvc.{Action, Controller}
+import reactivemongo.bson.{BSONDocumentReader, BSONDocumentWriter}
+
+import scala.concurrent.Future
 import scala.reflect.runtime.universe.TypeTag
+import scala.util.{Failure, Success}
 
 /**
  * Created by dberry on 11/3/14.
@@ -44,10 +43,7 @@ import scala.reflect.runtime.universe.TypeTag
  * the CRUD Operations
  *
  */
-trait DAOController[T <: Identifiable] extends Controller {
-  import ExecutionContext.Implicits.global
-
-  val dao:IdentifiableDAO[T]
+trait DAOController[T <: Identifiable] extends Controller with IdentifiableDAO[T] {
 
   val defaultOffset = 0
   val defaultLimit = 25
@@ -62,9 +58,9 @@ trait DAOController[T <: Identifiable] extends Controller {
   def create()(implicit writer: BSONDocumentWriter[T], fmt:Format[T] ) = Action.async(parse.json) { implicit request =>
     // process the json body
     request.body.validate[T].map { instance =>
-      dao.insert(instance).map {
+      insert(instance).map {
         case Failure(t) => BadRequest(t.getLocalizedMessage)
-        case Success(count) => if (count == 0) Created else BadRequest
+        case Success(count) => if (count == 1) Created else BadRequest
       }
     }.getOrElse(Future.successful(BadRequest("invalid json")))
   }
@@ -78,7 +74,7 @@ trait DAOController[T <: Identifiable] extends Controller {
    * @return - Action[AnyContent]
    */
   def getById(id:String)(implicit reader: BSONDocumentReader[T], fmt:Format[T]) = Action.async {
-    dao.findById(Some(id)).map {
+    findById(Some(id)).map {
       case None => NotFound
       case Some(doc) => Ok(Json.toJson(doc))
     }.recover {
@@ -98,7 +94,7 @@ trait DAOController[T <: Identifiable] extends Controller {
     val paramMap = request.queryString.map {
           case (k, v) => Logger.debug(k+"->"+v); k -> v.mkString
     }
-    dao.findOne(paramMap).map {
+    findOne(paramMap).map {
       case None => Logger.debug("Could not find by alternate attributes"); NotFound
       case Some(doc) => Ok(Json.toJson(doc))
     }.recover {
@@ -116,7 +112,7 @@ trait DAOController[T <: Identifiable] extends Controller {
   def update()(implicit writer: BSONDocumentWriter[T], fmt:Format[T]) = Action.async(parse.json) { request =>
       // process the json body
       request.body.validate[T].map { instance =>
-        dao.update(instance).map {
+        super.update(instance).map {
           case Failure(t) => BadRequest(t.getLocalizedMessage)
           case Success(count) => if (count > 0) Accepted else NotFound
         }
@@ -130,7 +126,7 @@ trait DAOController[T <: Identifiable] extends Controller {
    * @return - Action[AnyContent] which is a OK or NOT FOUND
    */
   def delete(id:String) = Action.async {
-    dao.remove(Some(id)).map {
+    remove(Some(id)).map {
       case Failure(t) => BadRequest(t.getLocalizedMessage)
       case Success(count) => if (count > 0) Ok else NotFound
     }
@@ -149,7 +145,7 @@ trait DAOController[T <: Identifiable] extends Controller {
       case (k, v) => Logger.debug(k+"->"+v); k -> v.mkString
     } - "q"
 
-    dao.remove(q, paramMap).map {
+    remove(q, paramMap).map {
       case Failure(t) => BadRequest(t.getLocalizedMessage)
       case Success(count) => Ok(count.toString)
     }
@@ -180,7 +176,7 @@ trait DAOController[T <: Identifiable] extends Controller {
       Logger.debug("p = "+p)
       Logger.debug("ipp = "+ipp)
 
-      dao.find(q, s, p, ipp, paramMap).map {
+      find(q, s, p, ipp, paramMap).map {
         docs =>
           Ok(Json.toJson(Map("page" -> Json.toJson(new Pagination(p,ipp,docs._2)), "items" -> Json.toJson(docs._1))))
       }
