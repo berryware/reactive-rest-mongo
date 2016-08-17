@@ -23,6 +23,7 @@
 package models.dao
 
 import reactivemongo.bson._
+import scaldi.Injector
 
 import scala.concurrent.Future
 import scala.util.Try
@@ -35,7 +36,7 @@ import models.Identifiable
  *
  * @author dberry
  */
-trait IdentifiableDAO[T <: Identifiable] extends MongoDao[T] {
+abstract class IdentifiableDAO[T <: Identifiable] extends MongoDao[T] {
 
   /**
    * Update a T document in a mongo collection

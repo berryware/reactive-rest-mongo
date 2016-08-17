@@ -29,7 +29,7 @@ import play.api.libs.json.{Format, Json}
 import play.api.mvc.{Action, Controller}
 import reactivemongo.bson.{BSONDocumentReader, BSONDocumentWriter}
 
-import scala.concurrent.Future
+import scala.concurrent.{ExecutionContext, Future}
 import scala.reflect.runtime.universe.TypeTag
 import scala.util.{Failure, Success}
 
@@ -43,7 +43,10 @@ import scala.util.{Failure, Success}
  * the CRUD Operations
  *
  */
-trait DAOController[T <: Identifiable] extends Controller with IdentifiableDAO[T] {
+trait DAOController[T <: Identifiable] extends Controller{
+  import ExecutionContext.Implicits.global
+
+  val dao:IdentifiableDAO[T]
 
   val defaultOffset = 0
   val defaultLimit = 25
@@ -58,7 +61,7 @@ trait DAOController[T <: Identifiable] extends Controller with IdentifiableDAO[T
   def create()(implicit writer: BSONDocumentWriter[T], fmt:Format[T] ) = Action.async(parse.json) { implicit request =>
     // process the json body
     request.body.validate[T].map { instance =>
-      insert(instance).map {
+      dao.insert(instance).map {
         case Failure(t) => BadRequest(t.getLocalizedMessage)
         case Success(count) => if (count == 1) Created else BadRequest
       }
@@ -74,7 +77,7 @@ trait DAOController[T <: Identifiable] extends Controller with IdentifiableDAO[T
    * @return - Action[AnyContent]
    */
   def getById(id:String)(implicit reader: BSONDocumentReader[T], fmt:Format[T]) = Action.async {
-    findById(Some(id)).map {
+    dao.findById(Some(id)).map {
       case None => NotFound
       case Some(doc) => Ok(Json.toJson(doc))
     }.recover {
@@ -94,7 +97,7 @@ trait DAOController[T <: Identifiable] extends Controller with IdentifiableDAO[T
     val paramMap = request.queryString.map {
           case (k, v) => Logger.debug(k+"->"+v); k -> v.mkString
     }
-    findOne(paramMap).map {
+    dao.findOne(paramMap).map {
       case None => Logger.debug("Could not find by alternate attributes"); NotFound
       case Some(doc) => Ok(Json.toJson(doc))
     }.recover {
@@ -112,7 +115,7 @@ trait DAOController[T <: Identifiable] extends Controller with IdentifiableDAO[T
   def update()(implicit writer: BSONDocumentWriter[T], fmt:Format[T]) = Action.async(parse.json) { request =>
       // process the json body
       request.body.validate[T].map { instance =>
-        super.update(instance).map {
+        dao.update(instance).map {
           case Failure(t) => BadRequest(t.getLocalizedMessage)
           case Success(count) => if (count > 0) Accepted else NotFound
         }
@@ -126,7 +129,7 @@ trait DAOController[T <: Identifiable] extends Controller with IdentifiableDAO[T
    * @return - Action[AnyContent] which is a OK or NOT FOUND
    */
   def delete(id:String) = Action.async {
-    remove(Some(id)).map {
+    dao.remove(Some(id)).map {
       case Failure(t) => BadRequest(t.getLocalizedMessage)
       case Success(count) => if (count > 0) Ok else NotFound
     }
@@ -145,7 +148,7 @@ trait DAOController[T <: Identifiable] extends Controller with IdentifiableDAO[T
       case (k, v) => Logger.debug(k+"->"+v); k -> v.mkString
     } - "q"
 
-    remove(q, paramMap).map {
+    dao.remove(q, paramMap).map {
       case Failure(t) => BadRequest(t.getLocalizedMessage)
       case Success(count) => Ok(count.toString)
     }
@@ -176,7 +179,7 @@ trait DAOController[T <: Identifiable] extends Controller with IdentifiableDAO[T
       Logger.debug("p = "+p)
       Logger.debug("ipp = "+ipp)
 
-      find(q, s, p, ipp, paramMap).map {
+      dao.find(q, s, p, ipp, paramMap).map {
         docs =>
           Ok(Json.toJson(Map("page" -> Json.toJson(new Pagination(p,ipp,docs._2)), "items" -> Json.toJson(docs._1))))
       }

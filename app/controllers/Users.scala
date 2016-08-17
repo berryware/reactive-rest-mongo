@@ -22,7 +22,8 @@
 
 package controllers
 
-import models.User
+import models.{UserDao, User}
+import models.dao.IdentifiableDAO
 import scaldi.Injector
 
 /**
@@ -33,5 +34,5 @@ import scaldi.Injector
  *
  */
 class Users(implicit val injector: Injector) extends DAOController[User] {
-  val collectionName = User.collectionName
+  val dao = new UserDao
 }
