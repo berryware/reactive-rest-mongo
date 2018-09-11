@@ -23,9 +23,11 @@
 package controllers
 
 import models.User
-import models.dao.IdentifiableDAO
-import scaldi.Injector
+import org.exaxis.smd.MongoDaoController
+import scaldi.{Injectable, Injector}
 import services.UserService
+
+import scala.concurrent.ExecutionContext
 
 /**
  * Created by dberry on 25/3/14.
@@ -34,6 +36,7 @@ import services.UserService
  * It also needs to tell the controller what DAO object to use for the class. That's all
  *
  */
-class Users(implicit val injector: Injector) extends DAOController[User] {
+class Users(implicit val injector: Injector) extends MongoDaoController[User] with Injectable {
+  implicit val executionContext = inject [ExecutionContext]
   val dao = new UserService
 }

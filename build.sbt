@@ -2,20 +2,19 @@ name := "reactive-rest-mongo"
 
 version := "1.0-SNAPSHOT"
 
-scalaVersion := "2.11.8"
 lazy val root = (project in file(".")).enablePlugins(PlayScala)
 
+scalaVersion := "2.12.4"
+
+resolvers += Resolver.bintrayRepo("exaxisllc","SMD")
+
 libraryDependencies ++= Seq(
-  cache
-  , "org.reactivemongo" %% "reactivemongo" % "0.11.14"
-	, "org.reactivemongo" %% "play2-reactivemongo" % "0.11.14"
-	, "org.reactivemongo" %% "reactivemongo-play-json" % "0.11.14"
-  , "org.scaldi" %% "scaldi-play" % "0.5.15"
-  , "org.scaldi" %% "scaldi-akka" % "0.5.7"
-  , "com.github.athieriot" %% "specs2-embedmongo" % "0.7.0" % Test
-  , "org.scalatestplus.play" %% "scalatestplus-play" % "1.5.0" % Test
-  , "com.github.simplyscala" %% "scalatest-embedmongo" % "0.2.2" %  Test
+  "org.scaldi" %% "scaldi-play" % "0.5.17"
+  , "org.scaldi" %% "scaldi-akka" % "0.5.8"
+  , "org.exaxis.smd" %% "smd-core" % "1.0.2"
+  , "org.exaxis.smd" %% "smd-play" % "1.0.2"
+  , "com.typesafe.play" % "play-json-joda_2.12" % "2.6.0"
+  , "org.scalatestplus.play" %% "scalatestplus-play" % "3.1.2" % Test
+  , "de.flapdoodle.embed" % "de.flapdoodle.embed.mongo" % "2.1.1" % Test  // force a newer version
+  , "com.github.simplyscala" %% "scalatest-embedmongo" % "0.2.4" %  Test
 )
-
-scalacOptions += "-feature"
-

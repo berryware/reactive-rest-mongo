@@ -1,0 +1,5 @@
+package modules
+
+class ReactiveRestMongoModule {
+
+}

@@ -22,10 +22,11 @@
 
 package models
 
+import org.exaxis.smd.{Identifiable, DaoData}
 import org.joda.time.DateTime
-import models.dao.IdentifiableDAO
 import reactivemongo.bson._
-import reactivemongo.bson.BSONDateTime
+import play.api.libs.json.JodaWrites._
+import play.api.libs.json.JodaReads._
 
 /**
  * The case class for the User Data access object. It needs to extend Identifiable or Temporal to be usable by the
@@ -51,7 +52,7 @@ case class User (
   avatarUrl: Option[String],
   created : Option[DateTime],
   updated : Option[DateTime]
-) extends Temporal
+) extends Identifiable
 
 /**
  * This is the companion object for the User case class and contains all the additional mojo needed by the reactive mongo wrapper.
@@ -66,43 +67,43 @@ object User {
   /**
    * String attribute names for the scala class
    */
-  val attrId = "id"
-  val attrFirstName = "firstName"
-  val attrLastName = "lastName"
-  val attrFullName = "fullName"
-  val attrAge = "age"
-  val attrEmail = "email"
-  val attrAvatarUrl = "avatarUrl"
-  val attrCreated = "created"
-  val attrUpdated = "updated"
+  val ATTR_ID = "id"
+  val ATTR_FIRSTNAME = "firstName"
+  val ATTR_LASTNAME = "lastName"
+  val ATTR_FULLNAME = "fullName"
+  val ATTR_AGE = "age"
+  val ATTR_EMAIL = "email"
+  val ATTR_AVATARURL = "avatarUrl"
+  val ATTR_CREATED = "created"
+  val ATTR_UPDATED = "updated"
 
   /**
    * String attribute names in the data store
    */
-  val dsId = "_id"
-  val dsAge = "_age"
+  val DS_ID = "_id"
+  val DS_AGE = "_age"
 
   /**
    * The JSON Formatter needed by the BSONReader and BSONWriter
    */
   implicit val format = Json.format[User]
 
-  implicit val userDaoData = new DaoData[User] {
+  implicit val daoData = new DaoData[User] {
     /**
      * defines the attributes that will be matched against a query in the search.
      */
     val filterSet = Set(
-      attrFirstName,
-      attrLastName,
-      attrFullName
+      ATTR_FIRSTNAME,
+      ATTR_LASTNAME,
+      ATTR_FULLNAME
     )
 
     /**
      * defines the mapping of scala attributes to datastore attributes, same named attributes do not need to be mapped
      */
     val attributeMap = Map (
-      attrId -> dsId,
-      attrAge -> dsAge
+      ATTR_ID -> DS_ID,
+      ATTR_AGE -> DS_AGE
     )
   }
 
@@ -113,34 +114,34 @@ object User {
   implicit val UserBSONReader = new BSONDocumentReader[User] {
     def read(doc: BSONDocument): User =
       User(
-        doc.getAs[BSONObjectID](userDaoData.dataSourceName(attrId)) map { _.stringify},
-        doc.getAs[String](userDaoData.dataSourceName(attrFirstName)).get,
-        doc.getAs[String](userDaoData.dataSourceName(attrLastName)).get,
-        doc.getAs[String](userDaoData.dataSourceName(attrFullName)).get,
-        doc.getAs[Int](userDaoData.dataSourceName(attrAge)),
-        doc.getAs[String](userDaoData.dataSourceName(attrEmail)),
-        doc.getAs[String](userDaoData.dataSourceName(attrAvatarUrl)),
-        doc.getAs[BSONDateTime](userDaoData.dataSourceName(attrCreated)).map(dt => new DateTime(dt.value)),
-        doc.getAs[BSONDateTime](userDaoData.dataSourceName(attrUpdated)).map(dt => new DateTime(dt.value))
+        doc.getAs[BSONObjectID](daoData.dsName(ATTR_ID)) map { _.stringify},
+        doc.getAs[String](daoData.dsName(ATTR_FIRSTNAME)).get,
+        doc.getAs[String](daoData.dsName(ATTR_LASTNAME)).get,
+        doc.getAs[String](daoData.dsName(ATTR_FULLNAME)).get,
+        doc.getAs[Int](daoData.dsName(ATTR_AGE)),
+        doc.getAs[String](daoData.dsName(ATTR_EMAIL)),
+        doc.getAs[String](daoData.dsName(ATTR_AVATARURL)),
+        doc.getAs[BSONDateTime](daoData.dsName(ATTR_CREATED)).map(dt => new DateTime(dt.value)),
+        doc.getAs[BSONDateTime](daoData.dsName(ATTR_UPDATED)).map(dt => new DateTime(dt.value))
       )
   }
 
   /**
-   * Marshalls a User into a BSONDocument
+   * Marshalls a User into a BSONDocument.
    *
+   * Never write the id out. It is handled by the dao
    */
   implicit val UserBSONWriter = new BSONDocumentWriter[User] {
     def write(user: User): BSONDocument =
       BSONDocument(
-        userDaoData.dataSourceName(attrId) -> user.id.map(BSONObjectID(_)),
-        userDaoData.dataSourceName(attrFirstName) -> user.firstName,
-        userDaoData.dataSourceName(attrLastName) -> user.lastName,
-        userDaoData.dataSourceName(attrFullName) -> user.fullName,
-        userDaoData.dataSourceName(attrAge) -> user.age,
-        userDaoData.dataSourceName(attrEmail) -> user.email,
-        userDaoData.dataSourceName(attrAvatarUrl) -> user.avatarUrl,
-        userDaoData.dataSourceName(attrCreated) -> user.created.map(date => BSONDateTime(date.getMillis)),
-        userDaoData.dataSourceName(attrUpdated) -> BSONDateTime(DateTime.now.getMillis)
+        daoData.dsName(ATTR_FIRSTNAME) -> user.firstName,
+        daoData.dsName(ATTR_LASTNAME) -> user.lastName,
+        daoData.dsName(ATTR_FULLNAME) -> user.fullName,
+        daoData.dsName(ATTR_AGE) -> user.age,
+        daoData.dsName(ATTR_EMAIL) -> user.email,
+        daoData.dsName(ATTR_AVATARURL) -> user.avatarUrl,
+        daoData.dsName(ATTR_CREATED) -> user.created.map(date => BSONDateTime(date.getMillis)),
+        daoData.dsName(ATTR_UPDATED) -> BSONDateTime(DateTime.now.getMillis)
       )
   }
 
