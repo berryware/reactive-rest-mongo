@@ -1,4 +1,4 @@
-#reactive-rest-mongo
+# reactive-rest-mongo
 
 This project implements a rest api pattern using Scala 2.12.4, Play 2.6.18, Scaldi, SMD, ReactiveMongo, and MongoDB. SMD provides built-in Rest API processing so that a minimal number of files need to be added for new api calls. For each domain object that needs to be served up via the api, a new domain case class and object need to be created, a new controller file is created that contains the collection name,  and new routes added to the play routes file. That's it.
 
